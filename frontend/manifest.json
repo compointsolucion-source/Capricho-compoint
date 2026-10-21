@@ -1,0 +1,15 @@
+{
+  "name": "Capricho Compoint",
+  "short_name": "Capricho",
+  "description": "Checador, corte del día, nómina y finanzas de Compoint",
+  "start_url": "login.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0c0a",
+  "theme_color": "#0a0c0a",
+  "lang": "es-MX",
+  "icons": [
+    { "src": "img/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

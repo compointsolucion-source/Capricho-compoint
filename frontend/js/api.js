@@ -279,3 +279,22 @@ function cerrarSesion() {
   localStorage.removeItem('cc_usuario');
   location.href = 'login.html';
 }
+
+// ---------- App instalable (Windows / Android) ----------
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+let _instalarApp = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _instalarApp = e;
+  document.querySelectorAll('.solo-instalable').forEach((x) => { x.style.display = ''; });
+});
+async function instalarApp() {
+  if (!_instalarApp) return toast('Abre el menú del navegador (⋮) y elige "Instalar Capricho Compoint".');
+  _instalarApp.prompt();
+  await _instalarApp.userChoice;
+  _instalarApp = null;
+}
+// ¿Corre dentro de la app de Android?
+function esAppAndroid() { return /CaprichoApp/.test(navigator.userAgent) || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }

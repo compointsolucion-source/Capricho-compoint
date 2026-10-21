@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Escanear QR — Capricho Compoint</title>
+<style>
+  body { background: #000; }
+  .esc { position: fixed; inset: 0; display:flex; flex-direction:column; }
+  .esc video { flex: 1; width: 100%; object-fit: cover; background:#000; }
+  .marco { position: absolute; top: 50%; left: 50%; width: 70vmin; height: 70vmin; transform: translate(-50%, -55%); border-radius: 20px; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); border: 3px solid var(--neon); }
+  .marco::after { content:''; position:absolute; left: 8%; right: 8%; height: 2px; background: var(--neon); box-shadow: 0 0 12px var(--neon); top: 50%; animation: barrido 2s ease-in-out infinite; }
+  @keyframes barrido { 0%,100% { top: 12%; } 50% { top: 88%; } }
+  .esc-arriba { position: absolute; top: 0; left: 0; right: 0; padding: 18px; display:flex; justify-content: space-between; align-items: center; color: #fff; z-index: 2; }
+  .esc-arriba a { color: #fff; font-size: 15px; background: rgba(0,0,0,.4); padding: 8px 14px; border-radius: 20px; }
+  .esc-abajo { position: absolute; bottom: 0; left: 0; right: 0; padding: 22px 18px 30px; text-align: center; color: #fff; z-index: 2; background: linear-gradient(transparent, rgba(0,0,0,.8)); }
+  .esc-abajo p { margin: 0; font-size: 15px; }
+  .esc-abajo .err { color: var(--red); background: rgba(0,0,0,.6); padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 13.5px; }
+</style>
+</head>
+<body>
+<div class="esc">
+  <video id="video" playsinline muted autoplay></video>
+  <div class="marco"></div>
+  <div class="esc-arriba"><a href="app.html">‹ Regresar</a><span style="font-size:13px;opacity:.85;">Capricho Compoint</span></div>
+  <div class="esc-abajo"><p id="msg">Apunta al código QR de la pantalla de la entrada</p><div id="err"></div></div>
+</div>
+<canvas id="lienzo" style="display:none;"></canvas>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/vendor/jsQR.js"></script>
+<script>
+const video = document.getElementById('video');
+const lienzo = document.getElementById('lienzo');
+const ctx = lienzo.getContext('2d', { willReadFrequently: true });
+let stream = null, listo = false;
+
+// Solo se aceptan QR del checador (evita que un QR ajeno abra otra página)
+function tokenDe(texto) {
+  try {
+    const u = new URL(texto);
+    const t = u.searchParams.get('t');
+    if (/checar\.html$/.test(u.pathname) && /^[a-f0-9]{32}$/.test(t || '')) return t;
+  } catch (_) {}
+  return null;
+}
+
+async function iniciar() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    requestAnimationFrame(leer);
+  } catch (e) {
+    document.getElementById('err').innerHTML = '<div class="err">No se pudo abrir la cámara. Dale permiso de cámara a la app (Ajustes → Apps → Capricho Compoint → Permisos) e intenta de nuevo.</div>';
+  }
+}
+
+function leer() {
+  if (listo) return;
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    const escala = Math.min(1, 640 / video.videoWidth);
+    lienzo.width = Math.round(video.videoWidth * escala);
+    lienzo.height = Math.round(video.videoHeight * escala);
+    ctx.drawImage(video, 0, 0, lienzo.width, lienzo.height);
+    const img = ctx.getImageData(0, 0, lienzo.width, lienzo.height);
+    const codigo = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (codigo && codigo.data) {
+      const t = tokenDe(codigo.data);
+      if (t) {
+        listo = true;
+        if (navigator.vibrate) navigator.vibrate(80);
+        document.getElementById('msg').textContent = '✓ Código leído. Abriendo...';
+        stream.getTracks().forEach((x) => x.stop());
+        location.href = `checar.html?t=${t}`;
+        return;
+      }
+      document.getElementById('msg').textContent = 'Ese QR no es del checador. Apunta al de la pantalla de la entrada.';
+    }
+  }
+  requestAnimationFrame(leer);
+}
+iniciar();
+</script>
+</body>
+</html>

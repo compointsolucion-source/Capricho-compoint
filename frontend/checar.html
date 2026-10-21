@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="img/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c0a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
@@ -176,10 +178,12 @@ function mostrarResultadoFinal(data) {
     }
     c.innerHTML = `<div class="resultado ok">${titulo}${data.verificado_facial ? ' · rostro verificado ✓' : ''}<br><strong style="font-size:18px;">${esc(data.empleado)}</strong><div class="hora">${esc(data.hora)}</div></div>
       ${extra}
-      <p class="sub" style="margin-top:18px;">${saludo} Ya puedes cerrar esta página.</p>`;
+      <p class="sub" style="margin-top:18px;">${saludo} ${esAppAndroid() ? '' : 'Ya puedes cerrar esta página.'}</p>
+      ${esAppAndroid() ? '<a href="app.html" class="btn-primary" style="display:block;text-align:center;">Listo</a>' : ''}`;
   } else {
     c.innerHTML = `<div class="resultado error">${esc(data.error)}</div>
-      <p class="sub" style="margin-top:18px;">Vuelve a escanear el QR de la pantalla.</p>`;
+      <p class="sub" style="margin-top:18px;">Vuelve a escanear el QR de la pantalla.</p>
+      ${esAppAndroid() ? '<a href="escanear.html" class="btn-primary" style="display:block;text-align:center;">Escanear de nuevo</a>' : ''}`;
   }
 }
 

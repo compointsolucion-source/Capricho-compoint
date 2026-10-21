@@ -1,0 +1,77 @@
+# Compila la APK de Android de Capricho Compoint en los servidores de GitHub
+# y la deja en frontend/descargas/ para descargarla desde la página web.
+# Se ejecuta sola cuando cambia algo en app-android/, o a mano desde la pestaña "Actions".
+name: APK Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-android/**'
+      - '.github/workflows/apk-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Crear proyecto Android
+        run: npx cap add android
+
+      - name: Íconos y pantalla de inicio
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#0a0c0a' --splashBackgroundColor '#ffffff' --splashBackgroundColorDark '#0a0c0a'
+
+      - name: Permisos de cámara y versión
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' $MANIFEST
+          grep -n "CAMERA" $MANIFEST
+          VERSION_CODE=${{ github.run_number }}
+          sed -i "s/versionCode 1$/versionCode $VERSION_CODE/" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"1.0.$VERSION_CODE\"/" android/app/build.gradle
+          echo "apply from: '../../firmar.gradle'" >> android/app/build.gradle
+          npx cap sync android
+
+      - name: Compilar APK firmada
+        working-directory: app-android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          ls -la app/build/outputs/apk/release/
+
+      - name: Publicar la APK en la página de descargas
+        run: |
+          mkdir -p ../frontend/descargas
+          cp android/app/build/outputs/apk/release/app-release.apk ../frontend/descargas/capricho-compoint.apk
+          echo "{\"version\":\"1.0.${{ github.run_number }}\",\"fecha\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > ../frontend/descargas/version.json
+          cd ..
+          git config user.name "Compilador APK"
+          git config user.email "actions@github.com"
+          git add frontend/descargas/capricho-compoint.apk frontend/descargas/version.json
+          git commit -m "APK Android 1.0.${{ github.run_number }} [skip ci]" || echo "Sin cambios"
+          git pull --rebase origin main
+          git push origin HEAD:main

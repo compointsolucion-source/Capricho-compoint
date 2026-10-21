@@ -1,0 +1,18 @@
+// Firma de la APK de Capricho Compoint (se agrega a android/app/build.gradle en la compilación).
+// Siempre se firma con la misma llave para que las actualizaciones se instalen encima sin desinstalar.
+android {
+    signingConfigs {
+        capricho {
+            storeFile file('../../capricho.keystore')
+            storePassword System.getenv('APK_STORE_PASSWORD') ?: 'Compoint2026app'
+            keyAlias 'capricho'
+            keyPassword System.getenv('APK_KEY_PASSWORD') ?: 'Compoint2026app'
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.capricho
+            minifyEnabled false
+        }
+    }
+}

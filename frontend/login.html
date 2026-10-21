@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="img/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c0a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
@@ -38,6 +40,10 @@
       </div>
       <button type="submit" class="btn-primary" id="btnEntrar">Entrar</button>
       <p class="sub" style="margin-top:22px; text-align:center;">¿Eres empleado? <a href="portal.html" style="color:var(--neon);">Entra a tu portal</a></p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px;">
+        <a href="descargas/capricho-compoint.apk" class="btn-mini" id="lnkApk">🤖 App para Android</a>
+        <a href="#" class="btn-mini solo-instalable" style="display:none;" onclick="instalarApp();return false;">🖥️ Instalar en Windows</a>
+      </div>
     </form>
   </div>
 </div>
@@ -45,6 +51,7 @@
 <script src="js/api.js"></script>
 <script>
 if (getToken() && getUsuario()) location.href = 'dashboard.html';
+if (esAppAndroid()) document.getElementById('lnkApk').style.display = 'none';
 const form = document.getElementById('formLogin');
 const btn = document.getElementById('btnEntrar');
 form.addEventListener('submit', async (e) => {

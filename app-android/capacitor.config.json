@@ -1,0 +1,18 @@
+{
+  "appId": "mx.com.compoint.capricho",
+  "appName": "Capricho Compoint",
+  "webDir": "www",
+  "server": {
+    "url": "https://capricho-compoint-web.onrender.com/app.html",
+    "androidScheme": "https",
+    "allowNavigation": [
+      "capricho-compoint-web.onrender.com",
+      "capricho-compoint.onrender.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0a0c0a"
+  },
+  "appendUserAgent": "CaprichoApp"
+}
