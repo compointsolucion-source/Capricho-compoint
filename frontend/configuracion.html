@@ -27,8 +27,8 @@
         <form id="formGeneral" class="panel-body">
           <div class="field"><label>Nombre de la empresa</label><input type="text" name="empresa_nombre"></div>
           <div class="field"><label>Segundos que dura cada QR en pantalla</label><input type="number" name="qr_vigencia_segundos" min="10" max="300"></div>
-          <div class="checkbox-row"><input type="checkbox" name="requiere_facial" id="reqFacial"><label for="reqFacial">Pedir verificación facial (parpadeo + comparar con la foto del empleado)</label></div>
-          <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">Solo aplica a empleados que tengan foto cargada. Se guarda una foto de cada checada.</p>
+          <div class="checkbox-row"><input type="checkbox" name="requiere_facial" id="reqFacial"><label for="reqFacial">Verificación facial obligatoria al checar por QR (cámara + parpadeo + comparación con la foto del empleado)</label></div>
+          <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">Si está activa: sin verificar el rostro <b>no se registra</b> la checada, quien no tenga foto en su expediente no puede checar por QR, y cada checada guarda una foto como evidencia.</p>
           <button type="submit" class="btn-primary inline">Guardar</button>
         </form>
       </div>

@@ -21,6 +21,11 @@ const limitePin = rateLimit({
   message: { ok: false, error: 'Demasiados intentos desde este celular. Espera unos minutos.' }
 });
 
+async function facialObligatorio() {
+  const { rows } = await pool.query('SELECT requiere_facial FROM configuracion WHERE id = 1');
+  return !!rows[0]?.requiere_facial;
+}
+
 async function tokenVigente(token) {
   if (!token || !/^[a-f0-9]{32}$/.test(token)) return false;
   const { rows } = await pool.query('SELECT id FROM qr_tokens WHERE token = $1 AND expira_en > NOW()', [token]);
@@ -45,7 +50,10 @@ router.post('/token', verificarToken, async (req, res, next) => {
 
 // Celular: ¿sigue vigente el QR que escaneé?
 router.get('/valido/:token', async (req, res, next) => {
-  try { res.json({ valido: await tokenVigente(req.params.token) }); } catch (e) { next(e); }
+  try {
+    const valido = await tokenVigente(req.params.token);
+    res.json({ valido, requiere_facial: valido ? await facialObligatorio() : false });
+  } catch (e) { next(e); }
 });
 
 // Celular: paso 1 — validar PIN (dice si hace falta verificación facial)
@@ -56,13 +64,12 @@ router.post('/pin', limitePin, async (req, res, next) => {
     if (!(await tokenVigente(token))) return res.status(410).json({ ok: false, error: 'Este código ya expiró. Escanea el QR actual en pantalla.' });
     const emp = await buscarEmpleadoPorPin(String(pin));
     if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
-    const conf = (await pool.query('SELECT requiere_facial FROM configuracion WHERE id = 1')).rows[0];
-    res.json({
-      ok: true,
-      nombre: emp.nombre,
-      requiere_facial: !!conf?.requiere_facial && !!emp.foto_url,
-      foto_url: emp.foto_url
-    });
+    const facial = await facialObligatorio();
+    // Con verificación facial obligatoria, quien no tiene foto en su expediente no puede checar por QR
+    if (facial && !emp.foto_url) {
+      return res.status(403).json({ ok: false, error: `${emp.nombre}: no tienes foto registrada para verificar tu rostro. Pide a RH que te tome la foto.` });
+    }
+    res.json({ ok: true, nombre: emp.nombre, requiere_facial: facial, foto_url: emp.foto_url });
   } catch (e) { next(e); }
 });
 
@@ -75,14 +82,23 @@ router.post('/checar', limitePin, async (req, res, next) => {
     const emp = await buscarEmpleadoPorPin(String(pin));
     if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
 
+    const facial = await facialObligatorio();
     let fotoUrl = null;
-    if (foto) {
+    if (facial) {
+      // Obligatorio: verificación hecha y foto en vivo de evidencia (se guarda con la checada)
+      if (!emp.foto_url) return res.status(403).json({ ok: false, error: 'No tienes foto registrada. Pide a RH que te tome la foto.' });
+      const fotoValida = typeof foto === 'string' && /^data:image\/jpeg;base64,/.test(foto) && foto.length > 8000;
+      if (verificado_facial !== true || !fotoValida) {
+        return res.status(400).json({ ok: false, error: 'La verificación de rostro es obligatoria. Vuelve a escanear el QR.' });
+      }
+      fotoUrl = await guardarDataUrl(foto, { maxMb: 2 });
+    } else if (foto) {
       try { fotoUrl = await guardarDataUrl(foto, { maxMb: 2 }); } catch (_) { fotoUrl = null; }
     }
     const r = await registrarChecada({
-      empleadoId: emp.id, metodo: 'qr', ip: req.ip, fotoUrl, verificadoFacial: !!verificado_facial
+      empleadoId: emp.id, metodo: 'qr', ip: req.ip, fotoUrl, verificadoFacial: facial ? true : !!verificado_facial
     });
-    res.json({ ok: true, empleado: emp.nombre, tipo: r.tipo, hora: r.hora });
+    res.json({ ok: true, empleado: emp.nombre, tipo: r.tipo, hora: r.hora, verificado_facial: !!fotoUrl && (facial || !!verificado_facial) });
   } catch (e) {
     if (e.status === 409) return res.status(409).json({ ok: false, error: e.message });
     next(e);

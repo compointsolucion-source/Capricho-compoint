@@ -19,7 +19,7 @@ router.get('/', async (req, res, next) => {
   try {
     const fecha = req.query.fecha || ahora().fecha;
     const { rows } = await pool.query(
-      `SELECT c.*, e.nombre FROM checadas c JOIN empleados e ON e.id = c.empleado_id
+      `SELECT c.*, e.nombre, e.foto_url AS foto_ref FROM checadas c JOIN empleados e ON e.id = c.empleado_id
        WHERE c.fecha = $1 ORDER BY c.hora DESC, c.id DESC`, [fecha]
     );
     res.json({ fecha, checadas: rows });

@@ -63,13 +63,13 @@ async function cargar() {
     document.getElementById('tituloTabla').textContent = `Checadas del ${fechaCorta(d.fecha)}`;
     const t = document.getElementById('tabla');
     if (!checadas.length) { t.innerHTML = '<div class="empty-state">No hay checadas ese día.</div>'; return; }
-    t.innerHTML = `<table class="checadas"><thead><tr><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Método</th><th>Foto</th><th>Acciones</th></tr></thead><tbody>
+    t.innerHTML = `<table class="checadas"><thead><tr><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Método</th><th>Foto checada / expediente</th><th>Acciones</th></tr></thead><tbody>
       ${checadas.map((c) => `<tr>
         <td class="hora">${hhmmss(c.hora)}</td>
         <td>${esc(c.nombre)}</td>
         <td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
         <td class="${c.metodo === 'manual' ? 'metodo-manual' : ''}" style="text-transform:capitalize;font-size:12.5px;">${esc(c.metodo)}${c.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
-        <td>${c.foto_url ? `<a href="${esc(urlArchivo(c.foto_url))}" target="_blank"><img class="avatar-thumb" src="${esc(urlArchivo(c.foto_url))}" alt=""></a>` : '—'}</td>
+        <td style="white-space:nowrap;">${c.foto_url ? `<a href="${esc(urlArchivo(c.foto_url))}" target="_blank" title="Foto al checar"><img class="avatar-thumb" style="width:40px;height:40px;" src="${esc(urlArchivo(c.foto_url))}" alt=""></a>${c.foto_ref ? `<a href="${esc(urlArchivo(c.foto_ref))}" target="_blank" title="Foto del expediente"><img class="avatar-thumb" style="width:40px;height:40px;opacity:.75;" src="${esc(urlArchivo(c.foto_ref))}" alt=""></a>` : ''}` : '—'}</td>
         <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${c.id})">Editar</button>
           <button class="accion-link rojo" onclick="eliminar(${c.id})">Eliminar</button></td>
       </tr>`).join('')}</tbody></table>`;
