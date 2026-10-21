@@ -34,7 +34,8 @@
 
     <div id="pasoExpirado" class="paso-oculto">
       <h2>Código expirado</h2>
-      <p class="sub">Este QR ya venció. Vuelve a escanear el que está en pantalla ahora mismo.</p>
+      <p class="sub">Este QR ya venció. Escanea el que está en pantalla ahora mismo.</p>
+      <div class="acciones-reintento"></div>
     </div>
 
     <div id="pasoPin" class="paso-oculto">
@@ -69,6 +70,16 @@ let requiereFacial = false;
 let precarga = null;      // promesa: librería + modelos de reconocimiento facial
 let descriptorRef = null; // rasgos de la foto del expediente (se calculan una vez)
 let intentosFaciales = 0;
+let sesion = null;        // la da el servidor al validar el PIN (4 minutos para terminar)
+
+// Botones para volver a escanear: dentro de la app abre el escáner;
+// en el navegador también se puede escanear desde aquí con la cámara.
+function botonesReintento() {
+  return `<a href="escanear.html" class="btn-primary" style="display:block;text-align:center;margin-top:16px;">📷 Escanear el QR de nuevo</a>
+    ${esAppAndroid() ? '<a href="app.html" class="btn-secondary" style="display:flex;justify-content:center;margin-top:10px;">Volver al inicio</a>'
+      : '<p class="sub" style="margin-top:12px;">O vuelve a apuntar la cámara de tu celular al QR de la pantalla.</p>'}`;
+}
+document.querySelectorAll('.acciones-reintento').forEach((d) => { d.innerHTML = botonesReintento(); });
 
 function mostrar(id) {
   ['pasoCargando', 'pasoExpirado', 'pasoPin', 'pasoFacial', 'pasoResultado'].forEach((p) =>
@@ -110,7 +121,7 @@ function cargarFaceApi() {
     mostrar('pasoPin');
     pinInput.focus();
   } catch (_) {
-    document.getElementById('pasoCargando').innerHTML = '<div class="resultado error">Sin conexión con el servidor. Revisa tu internet y vuelve a escanear.</div>';
+    document.getElementById('pasoCargando').innerHTML = '<div class="resultado error">Sin conexión con el servidor. Revisa tu internet y vuelve a escanear.</div>' + botonesReintento();
   }
 })();
 
@@ -127,11 +138,13 @@ btn.addEventListener('click', async () => {
   try {
     const data = await post('/qr/pin', { token, pin });
     if (!data.ok) {
+      if (data.expirado) { mostrar('pasoExpirado'); return; }
       resultadoPin.innerHTML = `<div class="resultado error">${esc(data.error)}</div>`;
       btn.disabled = false; btn.textContent = 'Continuar';
       return;
     }
     empleadoActual = data;
+    sesion = data.sesion || null;
     if (data.requiere_facial) {
       mostrar('pasoFacial');
       document.getElementById('nombreEmpleado').innerHTML = `<img class="foto-ref" src="${esc(urlArchivo(data.foto_url))}"> ${esc(data.nombre)}`;
@@ -147,7 +160,7 @@ btn.addEventListener('click', async () => {
 
 async function registrarChecada(verificadoFacial, foto) {
   try {
-    const data = await post('/qr/checar', { token, pin: pinInput.value, verificado_facial: verificadoFacial, foto });
+    const data = await post('/qr/checar', { token, sesion, pin: pinInput.value, verificado_facial: verificadoFacial, foto });
     mostrarResultadoFinal(data);
   } catch (e) {
     mostrarResultadoFinal({ ok: false, error: 'Error de conexión al registrar la checada.' });
@@ -182,8 +195,7 @@ function mostrarResultadoFinal(data) {
       ${esAppAndroid() ? '<a href="app.html" class="btn-primary" style="display:block;text-align:center;">Listo</a>' : ''}`;
   } else {
     c.innerHTML = `<div class="resultado error">${esc(data.error)}</div>
-      <p class="sub" style="margin-top:18px;">Vuelve a escanear el QR de la pantalla.</p>
-      ${esAppAndroid() ? '<a href="escanear.html" class="btn-primary" style="display:block;text-align:center;">Escanear de nuevo</a>' : ''}`;
+      ${botonesReintento()}`;
   }
 }
 
@@ -202,7 +214,8 @@ function fallaFacial(mensaje) {
     document.getElementById('btnReintentar').onclick = () => { mostrar('pasoFacial'); iniciarVerificacionFacial(); };
   } else {
     c.innerHTML = `<div class="resultado error">${esc(mensaje)}</div>
-      <p class="sub" style="margin-top:16px;">La checada <b>no</b> se registró. Pide a tu encargado o a RH que registre tu entrada.</p>`;
+      <p class="sub" style="margin-top:16px;">La checada <b>no</b> se registró. Puedes volver a escanear el QR o pedir a tu encargado que registre tu entrada.</p>
+      ${botonesReintento()}`;
   }
 }
 

@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
 const { verificarToken } = require('../middleware/auth');
@@ -43,7 +44,7 @@ router.post('/token', verificarToken, async (req, res, next) => {
     // El token vale un poco más que lo que dura en pantalla, para quien lo escaneó al último segundo
     await pool.query(
       'INSERT INTO qr_tokens (token, expira_en) VALUES ($1, NOW() + make_interval(secs => $2))',
-      [token, segundos + 60]
+      [token, segundos + 120]
     );
     await pool.query("DELETE FROM qr_tokens WHERE expira_en < NOW() - INTERVAL '1 hour'");
     res.json({ token, segundos });
@@ -63,7 +64,7 @@ router.post('/pin', limitePin, async (req, res, next) => {
   try {
     const { token, pin } = req.body;
     if (!/^\d{4}$/.test(String(pin || ''))) return res.status(400).json({ ok: false, error: 'Ingresa los 4 dígitos de tu PIN.' });
-    if (!(await tokenVigente(token))) return res.status(410).json({ ok: false, error: 'Este código ya expiró. Escanea el QR actual en pantalla.' });
+    if (!(await tokenVigente(token))) return res.status(410).json({ ok: false, expirado: true, error: 'Este código ya expiró. Escanea otra vez el QR de la pantalla.' });
     const emp = await buscarEmpleadoPorPin(String(pin));
     if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
     const facial = await facialObligatorio();
@@ -71,17 +72,25 @@ router.post('/pin', limitePin, async (req, res, next) => {
     if (facial && !emp.foto_url) {
       return res.status(403).json({ ok: false, error: `${emp.nombre}: no tienes foto registrada para verificar tu rostro. Pide a RH que te tome la foto.` });
     }
-    res.json({ ok: true, nombre: emp.nombre, requiere_facial: facial, foto_url: emp.foto_url });
+    // Sesión de checada: con el QR ya validado, el empleado tiene 4 minutos para terminar
+    // la verificación facial aunque el QR de la pantalla ya haya cambiado.
+    const sesion = jwt.sign({ tipo: 'qr_sesion', emp: emp.id }, process.env.JWT_SECRET, { expiresIn: '4m' });
+    res.json({ ok: true, nombre: emp.nombre, requiere_facial: facial, foto_url: emp.foto_url, sesion });
   } catch (e) { next(e); }
 });
 
 // Celular: paso 2 — registrar la checada
 router.post('/checar', limitePin, async (req, res, next) => {
   try {
-    const { token, pin, verificado_facial, foto } = req.body;
+    const { token, pin, verificado_facial, foto, sesion } = req.body;
     if (!/^\d{4}$/.test(String(pin || ''))) return res.status(400).json({ ok: false, error: 'Datos incompletos.' });
-    if (!(await tokenVigente(token))) return res.status(410).json({ ok: false, error: 'Este código ya expiró. Escanea el QR actual en pantalla.' });
     const emp = await buscarEmpleadoPorPin(String(pin));
+    // Vale el QR vigente, o la sesión que se dio al validar el PIN (del mismo empleado)
+    let sesionValida = false;
+    if (sesion && emp) {
+      try { const s = jwt.verify(sesion, process.env.JWT_SECRET); sesionValida = s.tipo === 'qr_sesion' && s.emp === emp.id; } catch (_) { sesionValida = false; }
+    }
+    if (!sesionValida && !(await tokenVigente(token))) return res.status(410).json({ ok: false, expirado: true, error: 'El tiempo para checar se terminó. Escanea otra vez el QR de la pantalla.' });
     if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
 
     const facial = await facialObligatorio();
