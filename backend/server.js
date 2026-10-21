@@ -34,7 +34,13 @@ if (process.env.FRONTEND_DIR) {
   app.use(express.static(dir));
 }
 
-app.get('/', (req, res) => res.json({ ok: true, sistema: 'Capricho-compoint', api: '/api' }));
+// Si alguien abre la dirección del servidor en el navegador, lo manda a la página de entrada
+app.get('/', (req, res) => {
+  if (process.env.FRONTEND_URL && req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
+    return res.redirect(process.env.FRONTEND_URL.replace(/\/$/, '') + '/login.html');
+  }
+  res.json({ ok: true, sistema: 'Capricho-compoint', api: '/api' });
+});
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', require('./routes/auth'));
