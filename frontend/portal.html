@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
 <title>Portal del empleado — Capricho-compoint</title>
 </head>
 <body>
@@ -38,6 +39,12 @@
     <div class="vacas-card">
       <div><div class="num" id="vDisp">—</div><div class="lbl">Días de vacaciones disponibles este año</div></div>
       <div style="text-align:right;font-size:12.5px;color:var(--muted);" id="vDet"></div>
+    </div>
+
+    <div id="modulos"></div>
+    <div class="panel" style="margin-bottom:20px;" id="panelPago">
+      <div class="panel-head"><h2>Mi pago</h2></div>
+      <div id="misPagos"><div class="cargando">Cargando...</div></div>
     </div>
 
     <div class="panel" style="margin-bottom:20px;">
@@ -102,6 +109,8 @@ async function cargar() {
     document.getElementById('checadas').innerHTML = d.checadas.length ? `<table class="checadas"><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th></tr></thead><tbody>
       ${d.checadas.map((c) => `<tr><td class="hora">${fechaCorta(c.fecha)}</td><td class="hora">${hhmmss(c.hora)}</td><td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td></tr>`).join('')}</tbody></table>`
       : '<div class="empty-state">Sin checadas registradas.</div>';
+    pintarModulos(e.permisos || {});
+    cargarPagos();
   } catch (e) {
     localStorage.removeItem('cc_token_empleado');
     vista(false);
@@ -132,6 +141,47 @@ document.getElementById('formSol').addEventListener('submit', async (ev) => {
     cargar();
   } catch (e) { toast(e.message, 'error'); }
 });
+function pintarModulos(p) {
+  const m = [
+    p.corte && ['corte.html', '💵', 'Corte del día', 'Captura la venta y los gastos de hoy'],
+    (p.surtida || p.gastos || p.ver_semana) && ['semana.html', '🧾', p.ver_semana ? 'Hoja semanal' : 'Gastos y surtida', 'Compras y gastos de la semana'],
+    p.nomina && ['nomina.html', '👥', 'Nómina y pagos', 'Pagos al personal'],
+    p.ver_utilidad && ['mes.html', '📈', 'Resumen del mes', 'Ventas, gastos y utilidad']
+  ].filter(Boolean);
+  document.getElementById('modulos').innerHTML = m.length ? `<div class="lbl" style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;">Mis módulos</div>
+    <div class="dos" style="margin-bottom:20px;">${m.map(([href, ico, t, d]) => `<a href="${href}" class="tarjeta" style="display:block;margin:0;border-color:rgba(93,247,106,.35);">
+      <div style="font-size:22px;">${ico}</div><div style="font-weight:700;margin-top:4px;">${t}</div><div style="font-size:12px;color:var(--muted);">${d}</div></a>`).join('')}</div>` : '';
+}
+async function cargarPagos() {
+  try {
+    const d = await papi('/portal/pagos');
+    const a = d.semana_actual;
+    let h = '';
+    if (a) {
+      h += `<div class="panel-body" style="border-bottom:1px solid var(--line);">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Semana en curso (${rangoSemana(a.lunes, sumarDiasStr(a.lunes, 6))}) · se actualiza con tus checadas</div>
+        <div class="dias" style="margin-bottom:10px;">${a.detalle.map((x) => `<i class="${x.estado}" title="${x.estado}">${x.codigo}</i>`).join('')}</div>
+        <div class="calc"><span class="muted">${a.dias_trabajados} días × ${$m(a.sueldo_diario)}</span><span class="money">${$m(a.sueldo)}</span></div>
+        <div class="calc"><span class="muted">Puntualidad (${a.dias_puntuales} días a tiempo)</span><span class="money pos">+${$m(a.bono_puntualidad)}</span></div>
+        ${a.extras.map((b) => `<div class="calc"><span class="muted">${esc(b.concepto)}</span><span class="money" style="color:${b.monto < 0 ? 'var(--red)' : '#4ea8f7'}">${b.monto > 0 ? '+' : ''}${$m(b.monto)}</span></div>`).join('')}
+        <div class="calc"><span style="font-weight:700;">${a.pago ? 'Pagado' : 'Llevas ganado'}</span><span class="money pos" style="font-weight:700;font-size:18px;">${$m(a.pago ? a.pago.total : a.total)}</span></div>
+      </div>`;
+    }
+    h += d.pagos.length ? d.pagos.map((p) => `<div class="alerta-fila"><div><div class="alerta-nombre">Semana ${rangoSemana(p.semana, sumarDiasStr(p.semana, 6))}</div>
+        <div class="alerta-detalle">${p.dias_trabajados} días · puntualidad ${$m(p.bono_puntualidad)}${Number(p.bonos_extra) ? ' · extras ' + $m(p.bonos_extra) : ''} · ${p.metodo} · ${fechaHora(p.pagado_en)}</div></div>
+        <div style="text-align:right;"><div class="money pos" style="font-weight:700;">${$m(p.total)}</div>
+        ${p.recibido_en ? '<span class="pagado">✍️ Recibido</span>' : `<button class="btn-pagar" onclick="confirmarRecibido(${p.id}, ${p.total})">Recibí mi pago</button>`}</div></div>`).join('')
+      : '<div class="empty-state" style="padding:22px;">Aún no tienes pagos registrados.</div>';
+    document.getElementById('misPagos').innerHTML = h;
+  } catch (e) { document.getElementById('misPagos').innerHTML = `<div class="empty-state">${esc(e.message)}</div>`; }
+}
+async function confirmarRecibido(id, total) {
+  const pin = await preguntar('Recibí mi pago', `Confirma con tu PIN que recibiste <b style="color:var(--neon)">${$m(total, 2)}</b>. Queda como tu firma de recibido.`,
+    { boton: 'Confirmar', campo: { label: 'Tu PIN', html: '<input name="valor" type="password" inputmode="numeric" maxlength="4" class="select-input">' } });
+  if (!pin) return;
+  try { await papi(`/portal/pagos/${id}/recibido`, { method: 'POST', body: { pin } }); toast('Pago confirmado ✓'); cargarPagos(); }
+  catch (e) { toast(e.message, 'error'); }
+}
 document.getElementById('btnSalir').onclick = () => { localStorage.removeItem('cc_token_empleado'); vista(false); };
 ajustarCampos();
 if (localStorage.getItem('cc_token_empleado')) cargar(); else vista(false);

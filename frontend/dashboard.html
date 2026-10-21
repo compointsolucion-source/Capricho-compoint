@@ -19,6 +19,7 @@
       <div class="fecha" id="fecha"></div>
     </div>
     <div id="avisoFestivo"></div>
+    <div id="finHoy"></div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="label">Empleados activos</div><div class="value" id="kTotal">—</div></div>
       <div class="kpi-card accent-forest"><div class="label">Presentes hoy</div><div class="value" id="kPresentes">—</div></div>
@@ -61,6 +62,18 @@ async function cargar() {
 }
 cargar();
 setInterval(cargar, 30000);
+// Resumen de finanzas de hoy (solo administrador)
+if (esAdmin()) {
+  api('/finanzas/corte').then((d) => {
+    const r = d.resumen, c = d.corte;
+    document.getElementById('finHoy').innerHTML = `<a href="corte.html" class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;margin-bottom:20px;flex-wrap:wrap;">
+      <div><div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);">Corte del día · ${fechaCorta(d.fecha)}</div>
+      <div style="font-size:13px;margin-top:3px;">${c ? (c.estado === 'cerrado' ? '<span class="estado-pill estado-activo">Cerrado</span>' : '<span class="estado-pill estado-pendiente">Abierto</span>') + ' · capturó ' + esc(c.capturado_por || '') : '<span style="color:var(--amber)">Todavía no se captura</span>'}</div></div>
+      <div style="display:flex;gap:26px;font-family:var(--font-mono);"><div><div style="font-size:11px;color:var(--muted);font-family:var(--font-body);">Venta</div>${$m(r.venta_total)}</div>
+      <div><div style="font-size:11px;color:var(--muted);font-family:var(--font-body);">Efectivo final</div><span style="color:var(--neon)">${$m(r.efectivo_final)}</span></div>
+      ${r.diferencia !== null ? `<div><div style="font-size:11px;color:var(--muted);font-family:var(--font-body);">Caja</div><span style="color:${r.diferencia < 0 ? 'var(--red)' : 'var(--neon)'}">${r.diferencia === 0 ? '✓' : (r.diferencia > 0 ? '+' : '') + $m(r.diferencia)}</span></div>` : ''}</div></a>`;
+  }).catch(() => {});
+}
 </script>
 </body>
 </html>

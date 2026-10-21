@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { registrarChecada } = require('../utils/registro');
+const { puntualidadAlChecar } = require('../utils/finanzas');
 
 const router = express.Router();
 
@@ -28,7 +29,9 @@ router.post('/checada', async (req, res, next) => {
     if (!rows[0]) return res.status(404).json({ ok: false, error: 'Huella no registrada a ningún empleado activo' });
     const tipo = ['entrada', 'salida'].includes(req.body.tipo) ? req.body.tipo : null;
     const r = await registrarChecada({ empleadoId: rows[0].id, metodo: 'huella', tipo, ip: req.ip });
-    res.json({ ok: true, empleado: rows[0].nombre, tipo: r.tipo, hora: r.hora });
+    let puntualidad = null;
+    if (r.tipo === 'entrada') { try { puntualidad = await puntualidadAlChecar(rows[0].id, r.fecha, r.hora); } catch (_) { puntualidad = null; } }
+    res.json({ ok: true, empleado: rows[0].nombre, tipo: r.tipo, hora: r.hora, puntualidad });
   } catch (e) {
     if (e.status === 409) return res.status(409).json({ ok: false, error: e.message });
     next(e);

@@ -44,6 +44,25 @@
       </div>
     </div>
 
+    <div class="panel" style="margin-bottom:20px;" id="finanzas">
+      <div class="panel-head"><h2>Finanzas, nómina y bonos</h2></div>
+      <form id="formFin" class="panel-body">
+        <div class="field"><label>Días que abre el negocio (días de operación)</label></div>
+        <div class="dias-grid" id="diasOp"></div>
+        <div class="form-grid cols-4">
+          <div class="field"><label>El día de operación termina a las</label><select name="hora_corte_dia"></select></div>
+          <div class="field"><label>Comisión de la terminal (%)</label><input name="comision_tarjeta" inputmode="decimal"></div>
+          <div class="field"><label>Bono de puntualidad por día ($)</label><input name="bono_puntualidad" inputmode="decimal"></div>
+          <div class="field"><label>Minutos de gracia para el bono</label><input name="puntualidad_tolerancia_min" type="number" min="0" max="120"></div>
+          <div class="field"><label>Extra por semana perfecta ($)</label><input name="bono_semana_perfecta" inputmode="decimal"></div>
+          <div class="field" style="grid-column: span 3;"><label>Avisar por correo cada que se cierre un corte (opcional)</label><input name="aviso_corte_correo" type="email" placeholder="tucorreo@gmail.com"></div>
+        </div>
+        <div class="checkbox-row"><input type="checkbox" name="bono_pierde_con_falta" id="pierde"><label for="pierde">Si falta un día en la semana, pierde todo el bono de puntualidad de esa semana</label></div>
+        <p style="font-size:12px;color:var(--muted);margin:-6px 0 16px;">El bono se gana cuando la primera entrada del día es antes o a la hora de su horario (más los minutos de gracia). El aviso por correo usa la configuración de "Correo para alertas".</p>
+        <button type="submit" class="btn-primary inline">Guardar reglas</button>
+      </form>
+    </div>
+
     <div class="config-grid" style="margin-bottom:20px;">
       <div class="panel">
         <div class="panel-head"><h2>Usuarios del panel</h2></div>
@@ -111,6 +130,7 @@ async function cargar() {
     conf = await api('/configuracion');
     const g = conf.general;
     pintarTemas(g.tema);
+    pintarFinanzas(g);
     const fg = document.getElementById('formGeneral').elements;
     fg.empresa_nombre.value = g.empresa_nombre; fg.qr_vigencia_segundos.value = g.qr_vigencia_segundos; fg.requiere_facial.checked = g.requiere_facial;
     const fs = document.getElementById('formSmtp').elements, s = conf.smtp;
@@ -163,6 +183,33 @@ document.getElementById('formGeneral').addEventListener('submit', async (ev) => 
   try {
     await api('/configuracion/general', { method: 'PUT', body: { ...conf.general, empresa_nombre: f.empresa_nombre.value, qr_vigencia_segundos: f.qr_vigencia_segundos.value, requiere_facial: f.requiere_facial.checked } });
     toast('Configuración guardada.'); cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+function pintarFinanzas(g) {
+  const f = document.getElementById('formFin');
+  const dias = (g.dias_operacion || 'X,J,V,S,D').split(',');
+  const nombres = { L: 'Lun', M: 'Mar', X: 'Mié', J: 'Jue', V: 'Vie', S: 'Sáb', D: 'Dom' };
+  document.getElementById('diasOp').innerHTML = Object.entries(nombres).map(([k, v]) =>
+    `<div class="dia-chip"><input type="checkbox" id="op${k}" value="${k}" ${dias.includes(k) ? 'checked' : ''}><label for="op${k}">${v}</label></div>`).join('');
+  f.hora_corte_dia.innerHTML = Array.from({ length: 13 }, (_, h) => `<option value="${h}">${h === 0 ? '12:00 am (medianoche)' : h + ':00 am'}</option>`).join('');
+  f.hora_corte_dia.value = g.hora_corte_dia ?? 6;
+  f.comision_tarjeta.value = Number(g.comision_tarjeta ?? 3.5);
+  f.bono_puntualidad.value = Number(g.bono_puntualidad ?? 60);
+  f.puntualidad_tolerancia_min.value = g.puntualidad_tolerancia_min ?? 0;
+  f.bono_semana_perfecta.value = Number(g.bono_semana_perfecta ?? 0);
+  f.aviso_corte_correo.value = g.aviso_corte_correo || '';
+  f.bono_pierde_con_falta.checked = !!g.bono_pierde_con_falta;
+}
+document.getElementById('formFin').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const dias = Array.from(document.querySelectorAll('#diasOp input:checked')).map((i) => i.value);
+  if (!dias.length) return toast('Elige al menos un día de operación.', 'error');
+  try {
+    await api('/configuracion/general', { method: 'PUT', body: { ...conf.general, dias_operacion: dias, hora_corte_dia: f.hora_corte_dia.value,
+      comision_tarjeta: f.comision_tarjeta.value, bono_puntualidad: f.bono_puntualidad.value, puntualidad_tolerancia_min: f.puntualidad_tolerancia_min.value,
+      bono_semana_perfecta: f.bono_semana_perfecta.value, aviso_corte_correo: f.aviso_corte_correo.value, bono_pierde_con_falta: f.bono_pierde_con_falta.checked } });
+    toast('Reglas de finanzas guardadas.'); cargar();
   } catch (e) { toast(e.message, 'error'); }
 });
 document.getElementById('formPass').addEventListener('submit', async (ev) => {

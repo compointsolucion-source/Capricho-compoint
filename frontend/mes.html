@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<title>Mes — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="semana-nav"><h1 style="margin-right:12px;">Mes</h1><button class="flecha" onclick="mover(-1)">‹</button><div class="rango" id="rango">—</div><button class="flecha" onclick="mover(1)">›</button></div>
+      <div class="botones"><button class="btn-secondary" onclick="window.print()">🖨 Imprimir</button><button class="btn-secondary" id="btnCsv">Excel</button></div>
+    </div>
+    <div id="app"><div class="cargando">Calculando el mes...</div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+let YO = null, M = null, mes = null;
+const $ = (id) => document.getElementById(id);
+(async function inicio() {
+  YO = await iniciarFinanzas(['ver_utilidad']);
+  if (!YO) return;
+  mes = new URLSearchParams(location.search).get('mes') || YO.dia_operacion.slice(0, 7);
+  cargar();
+})();
+async function cargar() {
+  const [a, m] = mes.split('-').map(Number);
+  $('rango').textContent = `${MESES[m - 1].charAt(0).toUpperCase() + MESES[m - 1].slice(1)} ${a}`;
+  $('app').innerHTML = '<div class="cargando">Calculando el mes...</div>';
+  try { M = await apiFin(`/finanzas/mes?mes=${mes}`); pintar(); }
+  catch (e) { $('app').innerHTML = `<div class="resultado error">${esc(e.message)}</div>`; }
+}
+function mover(n) {
+  let [a, m] = mes.split('-').map(Number);
+  m += n; if (m < 1) { m = 12; a--; } if (m > 12) { m = 1; a++; }
+  mes = `${a}-${String(m).padStart(2, '0')}`; history.replaceState(null, '', `?mes=${mes}`); cargar();
+}
+function pct(a, b) {
+  if (!b) return '<span class="muted">sin datos del mes anterior</span>';
+  const p = Math.round((a - b) / Math.abs(b) * 100);
+  return `<b style="color:${p >= 0 ? 'var(--neon)' : 'var(--red)'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p)}%</b> vs mes anterior`;
+}
+const k = (n) => Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(1)}k` : $m(n);
+
+function pintar() {
+  const t = M.totales, ant = M.anterior;
+  const gastos = t.gastos_total + t.comision_tarjeta;
+  const max = Math.max(1, ...M.semanas.map((s) => s.venta_total));
+  const maxCat = Math.max(1, ...M.categorias.map((c) => c.monto));
+  const maxDia = Math.max(1, ...M.por_dia.map((d) => d.venta));
+  const mejor = M.por_dia.reduce((b, d) => (!b || d.venta > b.venta ? d : b), null);
+  $('app').innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">Venta del mes</div><div class="value money" style="font-size:26px;">${$m(t.venta_total)}</div><div class="delta">${pct(t.venta_total, ant.venta_total)}</div></div>
+      <div class="kpi-card accent-amber"><div class="label">Con tarjeta</div><div class="value money" style="font-size:26px;">${$m(t.venta_tarjeta)}</div><div class="delta">${t.venta_total ? Math.round(t.venta_tarjeta / t.venta_total * 100) : 0}% · comisión ${$m(t.comision_tarjeta)}</div></div>
+      <div class="kpi-card accent-red"><div class="label">Gastos del mes</div><div class="value money" style="font-size:26px;">${$m(gastos)}</div><div class="delta">${t.venta_total ? Math.round(gastos / t.venta_total * 100) : 0}% de la venta</div></div>
+      <div class="kpi-card accent-forest destacada"><div class="label">Utilidad del mes</div><div class="value money" style="font-size:26px;${t.utilidad < 0 ? 'color:var(--red);text-shadow:none;' : ''}">${$m(t.utilidad)}</div><div class="delta">Margen <b>${t.venta_total ? Math.round(t.utilidad / t.venta_total * 100) : 0}%</b> · ${pct(t.utilidad, ant.utilidad)}</div></div>
+    </div>
+    <div class="grid-sem">
+      <div class="panel"><div class="panel-head"><h2>Semana por semana</h2><div class="leyenda"><span style="--c:#4ea8f7">Venta</span><span style="--c:var(--red)">Gastos</span><span style="--c:var(--neon)">Utilidad</span></div></div>
+        ${M.semanas.length ? `<div class="graf"><div class="graf-barras">${M.semanas.map((s) => `<div class="graf-grupo"><div class="graf-col">
+          <div class="c-venta" style="height:${Math.round(s.venta_total / max * 180)}px" title="Venta ${$m(s.venta_total)}"></div>
+          <div class="c-gasto" style="height:${Math.round((s.gastos_total + s.comision_tarjeta) / max * 180)}px" title="Gastos ${$m(s.gastos_total + s.comision_tarjeta)}"></div>
+          <div class="c-util" style="height:${Math.max(0, Math.round(s.utilidad / max * 180))}px" title="Utilidad ${$m(s.utilidad)}"></div></div></div>`).join('')}</div>
+          <div class="graf-lbl">${M.semanas.map((s) => `<div>${diaMes(s.lunes)}–${diaMes(s.domingo)}</div>`).join('')}</div></div>
+        <div class="tabla-scroll"><table class="checadas"><thead><tr><th>Semana</th><th class="r">Venta</th><th class="r">Tarjeta</th><th class="r">Gastos</th><th class="r">Utilidad</th><th class="r">Caja</th></tr></thead><tbody>
+          ${M.semanas.map((s) => `<tr class="fila-click" onclick="location.href='semana.html?fecha=${s.lunes}'"><td>${rangoSemana(s.lunes, s.domingo)}</td><td class="money">${$m(s.venta_total)}</td><td class="money">${$m(s.venta_tarjeta)}</td><td class="money">${$m(s.gastos_total + s.comision_tarjeta)}</td><td class="money ${s.utilidad < 0 ? 'neg' : 'pos'}">${$m(s.utilidad)}</td><td class="money ${s.diferencia_caja < 0 ? 'neg' : ''}">${s.diferencia_caja ? $m(s.diferencia_caja) : '✓'}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>Total</td><td class="money">${$m(t.venta_total)}</td><td class="money">${$m(t.venta_tarjeta)}</td><td class="money">${$m(gastos)}</td><td class="money ${t.utilidad < 0 ? 'neg' : 'pos'}">${$m(t.utilidad)}</td><td class="money ${t.diferencia_caja < 0 ? 'neg' : ''}">${t.diferencia_caja ? $m(t.diferencia_caja) : '✓'}</td></tr></tfoot></table></div>`
+        : '<div class="empty-state">Todavía no hay semanas terminadas en este mes.</div>'}
+        <p style="font-size:11.5px;color:var(--muted-2);padding:0 20px 14px;margin:0;">Cada semana (lunes a domingo) cuenta en el mes en que termina.</p>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:18px;"><div class="panel-head"><h2>¿En qué se fue el dinero?</h2></div><div class="barras">
+          ${M.categorias.length ? M.categorias.map((c) => `<div class="barra-fila"><span class="nombre">${esc(c.nombre)}</span><div class="pista"><div class="relleno" style="width:${Math.round(c.monto / maxCat * 100)}%;background:var(--red)"></div></div><span class="valor">${k(c.monto)}</span></div>`).join('') : '<div class="muted" style="font-size:13px;">Sin gastos.</div>'}
+        </div></div>
+        <div class="panel"><div class="panel-head"><h2>Venta por día de la semana</h2></div><div class="barras">
+          ${M.por_dia.length ? M.por_dia.map((d) => `<div class="barra-fila"><span class="nombre">${DIA_NOMBRE[d.dia]}${mejor && d.dia === mejor.dia ? ' ★' : ''}</span><div class="pista"><div class="relleno" style="width:${Math.round(d.venta / maxDia * 100)}%;background:${mejor && d.dia === mejor.dia ? 'var(--neon)' : '#4ea8f7'}"></div></div><span class="valor">${k(d.venta)}</span></div>`).join('') : '<div class="muted" style="font-size:13px;">Sin ventas.</div>'}
+        </div></div>
+      </div>
+    </div>`;
+}
+$('btnCsv').onclick = () => {
+  if (!M) return;
+  exportarCsv(`mes_${M.mes}.csv`, ['Semana', 'Venta total', 'Venta tarjeta', 'Gastos (incl. nómina)', 'Comisión terminal', 'Utilidad', 'Diferencia caja'],
+    M.semanas.map((s) => [`${s.lunes} a ${s.domingo}`, s.venta_total, s.venta_tarjeta, s.gastos_total, s.comision_tarjeta, s.utilidad, s.diferencia_caja]));
+};
+</script>
+</body>
+</html>

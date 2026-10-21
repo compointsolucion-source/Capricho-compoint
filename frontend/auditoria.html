@@ -16,7 +16,8 @@
   <main class="main">
     <div class="topbar"><h1>Auditoría</h1></div>
     <p style="color:var(--muted);font-size:13px;margin-top:-14px;margin-bottom:20px;">Registro de todas las checadas creadas, editadas o eliminadas manualmente desde el panel (últimos 200 movimientos).</p>
-    <div class="panel"><div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div></div>
+    <div class="panel" style="margin-bottom:20px;"><div class="panel-head"><h2>Checadas</h2></div><div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div></div>
+    <div class="panel"><div class="panel-head"><h2>Finanzas: cortes, gastos, nómina y permisos</h2></div><div id="tablaFin" class="tabla-scroll"><div class="cargando">Cargando...</div></div></div>
   </main>
 </div>
 <script src="js/config.js"></script>
@@ -37,6 +38,17 @@ api('/checadas/auditoria').then((rs) => {
       <td>${esc(r.admin_nombre || '(usuario eliminado)')}</td>
     </tr>`).join('')}</tbody></table>`;
 }).catch((e) => toast(e.message, 'error'));
+const ACC = { corregido: 'Corregido', reabierto: 'Reabierto', eliminado: 'Eliminado', bono_eliminado: 'Bono quitado', pago_deshecho: 'Pago deshecho', cambiados: 'Cambiados' };
+api('/finanzas/auditoria').then((rs) => {
+  const t = document.getElementById('tablaFin');
+  if (!rs.length) { t.innerHTML = '<div class="empty-state">Sin cambios registrados en finanzas.</div>'; return; }
+  const resumen = (o) => o ? esc(Object.entries(o).filter(([k]) => ['venta_total', 'venta_tarjeta', 'efectivo_contado', 'monto', 'total', 'concepto', 'corte', 'surtida', 'gastos', 'nomina', 'ver_semana', 'ver_utilidad', 'corregir'].includes(k))
+    .map(([k, v]) => `${k.replace('_', ' ')}: ${v === true ? 'sí' : v === false ? 'no' : v ?? '—'}`).join(' · ')) : '—';
+  t.innerHTML = `<table class="checadas"><thead><tr><th>Fecha/hora</th><th>Módulo</th><th>Acción</th><th>Detalle</th><th>Antes</th><th>Después</th><th>Usuario</th></tr></thead><tbody>
+    ${rs.map((r) => `<tr><td class="hora">${fechaHora(r.creado_en)}</td><td style="text-transform:capitalize;">${esc(r.modulo)}</td>
+      <td><span class="accion-pill accion-${r.accion === 'cambiados' || r.accion === 'reabierto' ? 'editada' : r.accion === 'corregido' ? 'editada' : 'eliminada'}">${ACC[r.accion] || esc(r.accion)}</span></td>
+      <td style="font-size:12.5px;">${esc(r.descripcion || '')}</td><td style="font-size:11.5px;color:var(--muted);">${resumen(r.antes)}</td><td style="font-size:11.5px;color:var(--muted);">${resumen(r.despues)}</td><td>${esc(r.usuario || '')}</td></tr>`).join('')}</tbody></table>`;
+}).catch((e) => { document.getElementById('tablaFin').innerHTML = `<div class="empty-state">${esc(e.message)}</div>`; });
 </script>
 </body>
 </html>

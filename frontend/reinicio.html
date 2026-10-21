@@ -30,8 +30,8 @@
 <script>
 iniciarPanel({ soloAdmin: true });
 const NIVELES = [
-  { id: 'historial', titulo: 'Borrar historial de asistencia', frase: 'BORRAR HISTORIAL', desc: 'Para empezar un nuevo periodo con los mismos empleados.', borra: 'Borra: checadas, auditoría e incidencias. Conserva: empleados, horarios, festivos, usuarios y configuración.' },
-  { id: 'operativo', titulo: 'Borrar todo (menos usuarios y configuración)', frase: 'BORRAR TODO', desc: 'Para usar el sistema en otro negocio o empezar de cero con la plantilla.', borra: 'Borra: empleados (y sus fotos), horarios, festivos y todo el historial. Conserva: usuarios y configuración.' },
+  { id: 'historial', titulo: 'Borrar historial de asistencia', frase: 'BORRAR HISTORIAL', desc: 'Para empezar un nuevo periodo con los mismos empleados.', borra: 'Borra: checadas, incidencias, cortes, gastos, nómina pagada y auditorías. Conserva: empleados, horarios, festivos, proveedores, usuarios y configuración.' },
+  { id: 'operativo', titulo: 'Borrar todo (menos usuarios y configuración)', frase: 'BORRAR TODO', desc: 'Para usar el sistema en otro negocio o empezar de cero con la plantilla.', borra: 'Borra: empleados (y sus fotos), horarios, festivos, cortes, gastos, nómina y todo el historial. Conserva: usuarios, proveedores y configuración.' },
   { id: 'fabrica', titulo: 'Reinicio de fábrica', frase: 'REINICIO DE FABRICA', critico: true, desc: 'Deja el sistema como recién instalado.', borra: 'Borra todo lo anterior, todos los demás usuarios y la configuración de correo y tema. Solo se conserva TU usuario para que no te quedes fuera.' }
 ];
 document.getElementById('niveles').innerHTML = NIVELES.map((n) => `

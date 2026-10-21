@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(verificarToken);
 
 const COLUMNAS = `e.id, e.nombre, e.puesto, e.departamento, e.sucursal, e.foto_url, e.numero_empleado,
-  e.huella_id, e.horario_id, e.jefe_directo_id, e.fecha_ingreso, e.activo, e.creado_en,
+  e.huella_id, e.horario_id, e.jefe_directo_id, e.fecha_ingreso, e.activo, e.creado_en, e.sueldo_diario, e.permisos,
   (e.pin_hash IS NOT NULL) AS tiene_pin`;
 
 // Lista completa (admin) — o solo su equipo directo (supervisor)
@@ -69,6 +69,7 @@ async function validar(body, id = null) {
       horario_id: body.horario_id ? Number(body.horario_id) : null,
       fecha_ingreso: body.fecha_ingreso || null,
       activo: body.activo !== false,
+      sueldo_diario: Math.max(0, Math.round((Number(String(body.sueldo_diario ?? 0).replace(/[$,\s]/g, '')) || 0) * 100) / 100),
       pin
     }
   };
@@ -81,10 +82,10 @@ router.post('/', requiereAdmin, async (req, res, next) => {
     const fotoUrl = req.body.foto ? await guardarDataUrl(req.body.foto) : null;
     const pinHash = datos.pin ? await bcrypt.hash(datos.pin, 10) : null;
     const { rows } = await pool.query(
-      `INSERT INTO empleados (nombre, puesto, departamento, sucursal, numero_empleado, huella_id, horario_id, fecha_ingreso, activo, pin_hash, foto_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+      `INSERT INTO empleados (nombre, puesto, departamento, sucursal, numero_empleado, huella_id, horario_id, fecha_ingreso, activo, pin_hash, foto_url, sueldo_diario)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
       [datos.nombre, datos.puesto, datos.departamento, datos.sucursal, datos.numero_empleado, datos.huella_id,
-       datos.horario_id, datos.fecha_ingreso, datos.activo, pinHash, fotoUrl]
+       datos.horario_id, datos.fecha_ingreso, datos.activo, pinHash, fotoUrl, datos.sueldo_diario]
     );
     res.json({ ok: true, id: rows[0].id });
   } catch (e) { next(e); }
@@ -95,8 +96,8 @@ router.put('/:id', requiereAdmin, async (req, res, next) => {
     const id = Number(req.params.id);
     const { errores, datos } = await validar(req.body, id);
     if (errores.length) return res.status(400).json({ error: errores.join(' ') });
-    const sets = ['nombre=$1', 'puesto=$2', 'departamento=$3', 'sucursal=$4', 'numero_empleado=$5', 'huella_id=$6', 'horario_id=$7', 'fecha_ingreso=$8', 'activo=$9'];
-    const valores = [datos.nombre, datos.puesto, datos.departamento, datos.sucursal, datos.numero_empleado, datos.huella_id, datos.horario_id, datos.fecha_ingreso, datos.activo];
+    const sets = ['nombre=$1', 'puesto=$2', 'departamento=$3', 'sucursal=$4', 'numero_empleado=$5', 'huella_id=$6', 'horario_id=$7', 'fecha_ingreso=$8', 'activo=$9', 'sueldo_diario=$10'];
+    const valores = [datos.nombre, datos.puesto, datos.departamento, datos.sucursal, datos.numero_empleado, datos.huella_id, datos.horario_id, datos.fecha_ingreso, datos.activo, datos.sueldo_diario];
     if (datos.pin) { valores.push(await bcrypt.hash(datos.pin, 10)); sets.push(`pin_hash=$${valores.length}`); }
     if (req.body.foto) { valores.push(await guardarDataUrl(req.body.foto)); sets.push(`foto_url=$${valores.length}`); }
     if (req.body.quitar_pin) sets.push('pin_hash=NULL');

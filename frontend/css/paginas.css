@@ -221,3 +221,6 @@ tr.fila-retardo td:first-child { border-left:2px solid var(--amber); }
   table.checadas th, table.checadas td { padding:10px 12px; }
   .barra-fila { grid-template-columns:100px 1fr 32px; }
 }
+
+/* ---------- Grupos del menú lateral ---------- */
+.nav-grupo { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-2); padding: 14px 12px 6px; }

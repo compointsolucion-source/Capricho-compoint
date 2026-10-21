@@ -23,6 +23,7 @@
     Abre la cámara de tu celular y apunta al código. Este QR se renueva cada <strong id="seg">25 segundos</strong> por seguridad.
   </p>
   <div class="qr-ultima" id="estado"></div>
+  <div id="ultimas" style="margin-top:18px;width:340px;max-width:90vw;text-align:left;"></div>
 </div>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
@@ -57,6 +58,17 @@ function tic() {
 }
 renovar();
 setInterval(tic, 1000);
+// Últimas entradas con su puntualidad (motiva al equipo a llegar a tiempo)
+async function ultimas() {
+  try {
+    const l = await api('/qr/ultimas');
+    document.getElementById('ultimas').innerHTML = l.length ? `<div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;text-align:center;">Últimas entradas</div>
+      <div class="panel" style="padding:4px 14px;">${l.map((x) => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px;">
+        <span>${esc(x.nombre)}</span><span style="font-family:var(--font-mono);color:${x.a_tiempo === false ? 'var(--amber)' : 'var(--neon)'}">${String(x.hora).slice(0, 5)} ${x.a_tiempo === false ? '· ' + x.min_tarde + ' min tarde' : x.a_tiempo ? '✓ a tiempo' : ''}</span></div>`).join('')}</div>` : '';
+  } catch (_) {}
+}
+ultimas();
+setInterval(ultimas, 15000);
 // Mantener la pantalla encendida si el navegador lo permite
 if ('wakeLock' in navigator) {
   const pedir = () => navigator.wakeLock.request('screen').catch(() => {});

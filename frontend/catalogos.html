@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<title>Proveedores y conceptos — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Proveedores y conceptos</h1><button class="btn-primary inline" id="btnNuevo">+ Nuevo</button></div>
+    <p style="color:var(--muted);font-size:13px;margin-top:-14px;margin-bottom:20px;">Lo que aparece como botones rápidos en el corte del día y como filas en la hoja semanal. Desactivar un concepto lo oculta sin borrar su historial.</p>
+
+    <div class="panel form-panel paso-oculto" id="panelForm">
+      <div class="panel-head"><h2 id="tituloForm">Nuevo concepto</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid cols-3">
+          <div class="field"><label>Nombre</label><input name="nombre" required placeholder="Ej. Alex bebidas"></div>
+          <div class="field"><label>Dónde se captura</label>
+            <select name="tipo" id="selTipo"><option value="dia">Corte del día (gasto del día)</option><option value="semanal">Gasto fijo de la semana</option><option value="proveedor">Surtida · proveedor</option><option value="abastos">Surtida · mercado de abastos</option></select></div>
+          <div class="field"><label>Monto sugerido (opcional)</label><input name="monto_sugerido" inputmode="decimal" placeholder="$"></div>
+          <div class="field" id="fTel"><label>Teléfono / WhatsApp</label><input name="telefono" inputmode="tel" placeholder="33 1234 5678"></div>
+          <div class="field" id="fUbic"><label>Ubicación del puesto</label><input name="ubicacion" placeholder="Ej. Calle 15"></div>
+          <div class="field" id="fGrupo"><label>Agrupar en la hoja semanal como</label><input name="grupo" placeholder="Ej. Norteño (vacío = gastos del día)"></div>
+          <div class="field"><label>Ícono (emoji, opcional)</label><input name="icono" maxlength="4" placeholder="🧊"></div>
+          <div class="field"><label>Orden</label><input name="orden" type="number" value="0"></div>
+        </div>
+        <div class="checkbox-row"><input type="checkbox" name="activo" id="activo" checked><label for="activo">Activo</label></div>
+        <div class="form-actions"><button class="btn-primary inline" type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnCancelar">Cancelar</button></div>
+      </form>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-t="proveedor">Proveedores</button>
+      <button class="tab" data-t="abastos">Mercado de abastos</button>
+      <button class="tab" data-t="dia">Gastos del día</button>
+      <button class="tab" data-t="semanal">Gastos fijos</button>
+    </div>
+    <div class="panel"><div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+let L = [], tipo = 'proveedor', editId = null;
+const $ = (id) => document.getElementById(id);
+const form = $('form');
+(async () => { const yo = await iniciarFinanzas(); if (!yo) return; if (yo.tipo !== 'admin') return location.href = 'portal.html'; cargar(); })();
+
+async function cargar() {
+  try { L = await apiFin('/finanzas/conceptos?todos=1'); pintar(); } catch (e) { toast(e.message, 'error'); }
+}
+function pintar() {
+  const lista = L.filter((c) => c.tipo === tipo);
+  $('tabla').innerHTML = lista.length ? `<table class="checadas"><thead><tr><th>Concepto</th><th>${tipo === 'proveedor' ? 'Teléfono' : tipo === 'abastos' ? 'Ubicación' : 'Hoja semanal'}</th><th class="r">Sugerido</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${lista.map((c) => `<tr><td>${c.icono ? c.icono + ' ' : ''}${esc(c.nombre)}</td>
+      <td>${tipo === 'proveedor' ? (c.telefono ? `${esc(c.telefono)} <a class="wa" href="${linkWhatsApp(c.telefono)}" target="_blank">WhatsApp</a>` : '—') : tipo === 'abastos' ? esc(c.ubicacion || '—') : esc(c.grupo || (tipo === 'dia' ? 'Gastos del día' : c.nombre))}</td>
+      <td class="money">${c.monto_sugerido ? $m(c.monto_sugerido) : '—'}</td>
+      <td>${c.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
+      <td><button class="accion-link" onclick="editar(${c.id})">Editar</button></td></tr>`).join('')}</tbody></table>`
+    : '<div class="empty-state">No hay conceptos de este tipo. Agrega uno con "+ Nuevo".</div>';
+}
+function campos() {
+  const t = $('selTipo').value;
+  $('fTel').style.display = t === 'proveedor' ? '' : 'none';
+  $('fUbic').style.display = t === 'abastos' ? '' : 'none';
+  $('fGrupo').style.display = t === 'dia' || t === 'semanal' ? '' : 'none';
+}
+function abrir(c) {
+  editId = c ? c.id : null;
+  form.reset();
+  $('tituloForm').textContent = c ? `Editar: ${c.nombre}` : 'Nuevo concepto';
+  form.tipo.value = c ? c.tipo : tipo;
+  if (c) ['nombre', 'telefono', 'ubicacion', 'grupo', 'icono', 'orden'].forEach((k) => { form[k].value = c[k] ?? ''; });
+  form.monto_sugerido.value = c && c.monto_sugerido ? c.monto_sugerido : '';
+  form.activo.checked = c ? c.activo : true;
+  campos();
+  $('panelForm').classList.remove('paso-oculto');
+  form.nombre.focus();
+}
+function editar(id) { abrir(L.find((c) => c.id === id)); }
+$('selTipo').onchange = campos;
+$('btnNuevo').onclick = () => abrir(null);
+$('btnCancelar').onclick = () => $('panelForm').classList.add('paso-oculto');
+form.onsubmit = async (ev) => {
+  ev.preventDefault();
+  const b = { nombre: form.nombre.value, tipo: form.tipo.value, telefono: form.telefono.value, ubicacion: form.ubicacion.value, grupo: form.grupo.value,
+    icono: form.icono.value, orden: form.orden.value, monto_sugerido: form.monto_sugerido.value, activo: form.activo.checked };
+  try {
+    if (editId) await apiFin(`/finanzas/conceptos/${editId}`, { method: 'PUT', body: b });
+    else await apiFin('/finanzas/conceptos', { method: 'POST', body: b });
+    toast('Guardado.'); $('panelForm').classList.add('paso-oculto'); tipo = b.tipo;
+    document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.t === tipo));
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+};
+document.querySelectorAll('.tab').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+  b.classList.add('active'); tipo = b.dataset.t; pintar();
+});
+</script>
+</body>
+</html>

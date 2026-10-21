@@ -8,6 +8,19 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<style>
+  .bono-card { margin-top: 12px; border-radius: 12px; padding: 14px; background: linear-gradient(135deg, rgba(247,198,93,.16), rgba(247,198,93,.04)); border: 1px solid rgba(247,198,93,.5); text-align:center; }
+  .bono-card .big { font-family: var(--font-mono); font-size: 28px; font-weight:600; color: var(--amber); }
+  .bono-card .t { font-size: 11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color: var(--amber); }
+  .bono-card .d { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .racha { display:flex; gap:6px; margin-top: 10px; justify-content:center; flex-wrap: wrap; }
+  .racha span { min-width: 38px; height: 30px; border-radius: 8px; display:flex; align-items:center; justify-content:center; font-size: 10.5px; font-weight:700; background: var(--bg-panel-2); color: var(--muted-2); border: 1px solid var(--line); }
+  .racha .a_tiempo { background: var(--neon-bg); color: var(--neon); border-color: rgba(93,247,106,.4); }
+  .racha .retardo { background: var(--amber-bg); color: var(--amber); border-color: rgba(247,198,93,.4); }
+  .racha .falta { background: var(--red-bg); color: var(--red); border-color: rgba(247,106,106,.4); }
+  .res-tarde { background: var(--amber-bg); border: 1px solid rgba(247,198,93,.4); color: var(--amber); border-radius: 12px; padding: 12px; text-align:center; font-size: 13.5px; margin-top: 12px; }
+</style>
 <title>Registrar checada — Capricho-compoint</title>
 </head>
 <body>
@@ -151,7 +164,18 @@ function mostrarResultadoFinal(data) {
     if (navigator.vibrate) navigator.vibrate(120);
     const titulo = data.tipo === 'entrada' ? 'Entrada registrada' : 'Salida registrada';
     const saludo = data.tipo === 'entrada' ? '¡Buen día!' : '¡Hasta luego!';
+    const p = data.puntualidad;
+    let extra = '';
+    if (p && p.evaluable) {
+      const CORTO = { L: 'LUN', M: 'MAR', X: 'MIÉ', J: 'JUE', V: 'VIE', S: 'SÁB', D: 'DOM' };
+      const racha = (p.racha || []).length ? `<div class="racha">${p.racha.map((r) => `<span class="${r.estado}">${CORTO[r.codigo]}</span>`).join('')}</div>` : '';
+      extra = p.a_tiempo
+        ? `<div class="bono-card"><div class="t">¡Llegaste a tiempo! · Bono de puntualidad</div><div class="big">+$${Number(p.bono_hoy || 0).toLocaleString('es-MX')}</div>
+            <div class="d">Llevas <b style="color:var(--white)">$${Number(p.bono_semana || 0).toLocaleString('es-MX')}</b> de bono esta semana</div>${racha}</div>`
+        : `<div class="res-tarde">Llegaste <b>${p.min_tarde} min tarde</b> (tu entrada es a las ${String(p.hora_entrada).slice(0, 5)}). Hoy no aplica el bono de puntualidad.${racha}</div>`;
+    }
     c.innerHTML = `<div class="resultado ok">${titulo}${data.verificado_facial ? ' · rostro verificado ✓' : ''}<br><strong style="font-size:18px;">${esc(data.empleado)}</strong><div class="hora">${esc(data.hora)}</div></div>
+      ${extra}
       <p class="sub" style="margin-top:18px;">${saludo} Ya puedes cerrar esta página.</p>`;
   } else {
     c.innerHTML = `<div class="resultado error">${esc(data.error)}</div>

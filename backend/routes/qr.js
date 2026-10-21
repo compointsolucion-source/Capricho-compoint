@@ -6,6 +6,8 @@ const { verificarToken } = require('../middleware/auth');
 const { buscarEmpleadoPorPin } = require('../utils/pin');
 const { registrarChecada } = require('../utils/registro');
 const { guardarDataUrl } = require('../utils/archivos');
+const { puntualidadAlChecar, evaluarEntrada, config, diaOperacion } = require('../utils/finanzas');
+const { sumarDias, aMinutos } = require('../utils/tiempo');
 
 const router = express.Router();
 
@@ -98,11 +100,31 @@ router.post('/checar', limitePin, async (req, res, next) => {
     const r = await registrarChecada({
       empleadoId: emp.id, metodo: 'qr', ip: req.ip, fotoUrl, verificadoFacial: facial ? true : !!verificado_facial
     });
-    res.json({ ok: true, empleado: emp.nombre, tipo: r.tipo, hora: r.hora, verificado_facial: !!fotoUrl && (facial || !!verificado_facial) });
+    let puntualidad = null;
+    if (r.tipo === 'entrada') { try { puntualidad = await puntualidadAlChecar(emp.id, r.fecha, r.hora); } catch (_) { puntualidad = null; } }
+    res.json({ ok: true, empleado: emp.nombre, tipo: r.tipo, hora: r.hora, verificado_facial: !!fotoUrl && (facial || !!verificado_facial), puntualidad });
   } catch (e) {
     if (e.status === 409) return res.status(409).json({ ok: false, error: e.message });
     next(e);
   }
+});
+
+// Pantalla de la entrada: últimas entradas de hoy con su puntualidad
+router.get('/ultimas', verificarToken, async (req, res, next) => {
+  try {
+    const conf = await config();
+    // Entradas de la noche en curso (día de operación: después de medianoche sigue contando la noche anterior)
+    const dia = diaOperacion(conf.hora_corte_dia);
+    const corte = `${String(conf.hora_corte_dia).padStart(2, '0')}:00:00`;
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (c.empleado_id) c.empleado_id, e.nombre, c.hora, h.hora_entrada
+       FROM checadas c JOIN empleados e ON e.id = c.empleado_id LEFT JOIN horarios h ON h.id = e.horario_id
+       WHERE c.tipo = 'entrada' AND ((c.fecha = $1 AND c.hora >= $3) OR (c.fecha = $2 AND c.hora < $3))
+       ORDER BY c.empleado_id, c.fecha, c.hora`, [dia, sumarDias(dia, 1), corte]);
+    const lista = rows.map((r) => ({ nombre: r.nombre, hora: r.hora, orden: aMinutos(r.hora) + (aMinutos(r.hora) < conf.hora_corte_dia * 60 ? 1440 : 0), ...evaluarEntrada(r.hora, r.hora_entrada, conf.tolerancia) }))
+      .sort((a, b) => b.orden - a.orden).slice(0, 6);
+    res.json(lista);
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

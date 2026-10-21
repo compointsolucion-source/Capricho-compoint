@@ -55,6 +55,7 @@ app.use('/api/portal', require('./routes/portal'));
 app.use('/api/reportes', require('./routes/reportes'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/configuracion', require('./routes/configuracion'));
+app.use('/api/finanzas', require('./routes/finanzas'));
 app.use('/api', require('./routes/sistema'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));

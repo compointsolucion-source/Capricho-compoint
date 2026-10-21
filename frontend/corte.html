@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<title>Corte del día — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="fin-wrap" id="app"><div class="cargando">Cargando...</div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+let YO = null, D = null, CONCEPTOS = [], fecha = null;
+const $ = (id) => document.getElementById(id);
+
+(async function inicio() {
+  YO = await iniciarFinanzas(['corte', 'ver_semana']);
+  if (!YO) return;
+  fecha = new URLSearchParams(location.search).get('fecha') || YO.dia_operacion;
+  try { CONCEPTOS = (await apiFin('/finanzas/conceptos')).filter((c) => c.tipo === 'dia'); } catch (_) {}
+  cargar();
+})();
+
+async function cargar() {
+  try {
+    D = await apiFin(`/finanzas/corte?fecha=${fecha}`);
+    pintar();
+    if (YO.permisos.ver_semana) pintarSemana();
+  } catch (e) { $('app').innerHTML = `<div class="resultado error">${esc(e.message)}</div>`; }
+}
+
+function nombreDia(f) { const d = new Date(`${f}T12:00:00`); return `${DIAS_SEMANA[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}`; }
+
+function pintar() {
+  const c = D.corte, r = D.resumen, ed = D.editable, cerrado = c && c.estado === 'cerrado';
+  const puedeCambiarDia = YO.permisos.ver_semana || YO.permisos.corregir;
+  $('app').innerHTML = `
+    <div class="fin-cab">
+      <div><h1>Corte del día</h1><p class="sub" style="text-transform:capitalize;">${nombreDia(fecha)}${fecha === D.dia_operacion ? ' · hoy' : ''}</p></div>
+      ${puedeCambiarDia ? `<div class="semana-nav"><button class="flecha" onclick="mover(-1)">‹</button><input type="date" id="selFecha" value="${fecha}" class="select-input" style="width:auto;padding:7px 10px;"><button class="flecha" onclick="mover(1)">›</button></div>` : ''}
+    </div>
+    <div id="semanaDots"></div>
+    ${cerrado ? `<div class="candado" style="margin-bottom:12px;">🔒 Corte <b style="color:var(--neon)">cerrado</b> por ${esc(c.cerrado_por || '')} el ${fechaHora(c.cerrado_en)}.
+      ${ed ? ' Tienes permiso para corregirlo: cada cambio queda en Auditoría.' : ' Si hay un error, solo el dueño puede corregirlo.'}
+      ${D.puede_reabrir ? '<br><button class="btn-mini" style="margin-top:8px;" onclick="reabrir()">Reabrir corte</button>' : ''}</div>` : ''}
+
+    <div class="tarjeta ${ed ? '' : 'bloqueado'}">
+      <div class="dos">
+        <div><div class="lbl">Venta total</div><div class="campo-dinero azul"><span>$</span><input id="vTotal" inputmode="decimal" value="${c ? c.venta_total : ''}" placeholder="0"></div></div>
+        <div><div class="lbl">Venta tarjeta</div><div class="campo-dinero ama"><span>$</span><input id="vTarjeta" inputmode="decimal" value="${c ? c.venta_tarjeta : ''}" placeholder="0"></div></div>
+      </div>
+      <div class="calc" style="margin-top:10px;"><span class="muted">Venta en efectivo</span><span class="money" id="vEfectivo"></span></div>
+    </div>
+
+    <div class="tarjeta">
+      <div class="lbl"><span>Gastos del día</span><span class="money neg" id="sumaGastos"></span></div>
+      <div id="listaGastos"></div>
+      ${ed ? `<div class="chips">${CONCEPTOS.map((k) => `<button type="button" class="chip" data-id="${k.id}" onclick="elegirConcepto(${k.id})">${k.icono ? k.icono + ' ' : ''}${esc(k.nombre)}</button>`).join('')}</div>
+      <form class="form-gasto" id="formGasto">
+        <select id="gConcepto">${CONCEPTOS.map((k) => `<option value="${k.id}">${esc(k.nombre)}</option>`).join('')}<option value="">Otro (escribir)…</option></select>
+        <input id="gMonto" inputmode="decimal" placeholder="$ monto">
+        <button class="btn-mini" type="submit" style="color:var(--neon);border-color:rgba(93,247,106,.4);">Agregar</button>
+        <input id="gTexto" placeholder="Describe el gasto" style="grid-column:1 / -1; display:none;">
+      </form>` : ''}
+    </div>
+
+    <div class="final">
+      <div class="lbl">Efectivo final</div>
+      <div class="big" id="efFinal"></div>
+      <div class="formula">Venta total − tarjeta − gastos del día</div>
+    </div>
+
+    <div class="tarjeta ${ed ? '' : 'bloqueado'}">
+      <div class="lbl">Efectivo contado en caja (arqueo)</div>
+      <div class="arqueo"><div class="campo-dinero" style="flex:1;"><span>$</span><input id="vContado" inputmode="decimal" value="${c && c.efectivo_contado !== null ? c.efectivo_contado : ''}" placeholder="Cuenta el efectivo"></div><span id="dif"></span></div>
+    </div>
+
+    <div class="tarjeta ${ed ? '' : 'bloqueado'}" style="padding:10px 14px;">
+      <label class="foto-box">
+        ${c && c.foto_terminal_url ? `<img class="mini" src="${esc(urlArchivo(c.foto_terminal_url))}">` : '<div class="mini"></div>'}
+        <div>Foto del corte de la terminal<br><b style="color:var(--white)">${c && c.foto_terminal_url ? 'Toca para cambiarla' : 'Toca para tomarla'}</b>
+        ${c && c.foto_terminal_url ? ` · <a href="${esc(urlArchivo(c.foto_terminal_url))}" target="_blank" style="color:var(--neon)" onclick="event.stopPropagation()">ver</a>` : ''}</div>
+        <input type="file" id="fotoTerminal" accept="image/*" capture="environment">
+      </label>
+    </div>
+
+    <div class="tarjeta ${ed ? '' : 'bloqueado'}">
+      <div class="lbl">Notas del día (opcional)</div>
+      <input id="vNotas" class="select-input" maxlength="255" value="${esc(c && c.notas ? c.notas : '')}" placeholder="Ej. evento privado, falla de terminal...">
+    </div>
+
+    ${D.puede_cerrar ? `<button class="btn-cerrar" id="btnCerrar">Cerrar corte del día</button>` : ''}
+    <div class="aviso-guardado" id="guardado">${c ? `Capturado por ${esc(c.capturado_por || '')}` : ''}</div>`;
+
+  pintarGastos();
+  recalcular();
+  if (ed) {
+    ['vTotal', 'vTarjeta', 'vContado'].forEach((id) => { $(id).oninput = recalcular; $(id).onchange = () => guardar(); });
+    $('vNotas').onchange = () => guardar();
+    $('fotoTerminal').onchange = subirFoto;
+    $('formGasto').onsubmit = agregarGasto;
+    $('gConcepto').onchange = () => { $('gTexto').style.display = $('gConcepto').value ? 'none' : 'block'; };
+  }
+  if ($('btnCerrar')) $('btnCerrar').onclick = cerrar;
+  if ($('selFecha')) $('selFecha').onchange = (e) => irA(e.target.value);
+}
+
+function pintarGastos() {
+  const ed = D.editable;
+  $('listaGastos').innerHTML = D.gastos.length ? D.gastos.map((g) => {
+    const k = CONCEPTOS.find((x) => x.id === g.concepto_id);
+    return `<div class="gasto-item"><div class="ico">${k && k.icono ? k.icono : '🧾'}</div><div class="txt">${esc(g.concepto)}<small>${esc(g.nota || g.capturado_por || '')}</small></div><span class="money">${$m(g.monto)}</span>
+      ${ed ? `<button class="borrar" title="Borrar" onclick="borrarGasto(${g.id})">×</button>` : ''}</div>`;
+  }).join('') : '<div class="muted" style="font-size:12.5px;padding:6px 0;">Sin gastos registrados.</div>';
+}
+
+function recalcular() {
+  const total = numero($('vTotal').value), tarjeta = numero($('vTarjeta').value);
+  const gastos = D.gastos.reduce((s, g) => s + g.monto, 0);
+  const final = total - tarjeta - gastos;
+  $('vEfectivo').textContent = $m(total - tarjeta, 2);
+  $('vEfectivo').style.color = tarjeta > total ? 'var(--red)' : '';
+  $('sumaGastos').textContent = gastos ? '−' + $m(gastos, 2) : '$0.00';
+  $('efFinal').textContent = $m(final, 2);
+  const contadoTxt = $('vContado').value.trim();
+  if (contadoTxt === '') { $('dif').innerHTML = ''; return; }
+  const dif = Math.round((numero(contadoTxt) - final) * 100) / 100;
+  $('dif').innerHTML = dif === 0 ? '<span class="dif ok">Cuadra ✓</span>'
+    : dif < 0 ? `<span class="dif mal">Faltan ${$m(-dif, 2)}</span>` : `<span class="dif" style="background:var(--amber-bg);color:var(--amber);">Sobran ${$m(dif, 2)}</span>`;
+}
+
+async function guardar(extra = {}) {
+  const total = numero($('vTotal').value), tarjeta = numero($('vTarjeta').value);
+  if (tarjeta > total) { toast('La venta con tarjeta no puede ser mayor que la venta total.', 'error'); return false; }
+  $('guardado').textContent = 'Guardando...';
+  try {
+    const r = await apiFin('/finanzas/corte', { method: 'PUT', body: {
+      fecha, venta_total: $('vTotal').value, venta_tarjeta: $('vTarjeta').value,
+      efectivo_contado: $('vContado').value.trim() === '' ? null : $('vContado').value, notas: $('vNotas').value, ...extra } });
+    D.corte = r.corte; D.resumen = r.resumen; D.gastos = r.gastos;
+    $('guardado').textContent = `Guardado ✓ ${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+    return true;
+  } catch (e) { $('guardado').textContent = ''; toast(e.message, 'error'); return false; }
+}
+
+async function subirFoto(e) {
+  const foto = await leerArchivo(e.target, { maxLado: 1400 });
+  if (!foto) return;
+  if (await guardar({ foto_terminal: foto })) { toast('Foto guardada.'); pintar(); }
+}
+
+function elegirConcepto(id) {
+  const k = CONCEPTOS.find((x) => x.id === id);
+  $('gConcepto').value = id; $('gTexto').style.display = 'none';
+  document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('sel', Number(c.dataset.id) === id));
+  if (k && k.monto_sugerido && !$('gMonto').value) $('gMonto').value = k.monto_sugerido;
+  $('gMonto').focus();
+}
+
+async function agregarGasto(ev) {
+  ev.preventDefault();
+  const conceptoId = $('gConcepto').value;
+  const monto = numero($('gMonto').value);
+  if (!monto) return toast('Escribe el monto del gasto.', 'error');
+  if (!conceptoId && !$('gTexto').value.trim()) return toast('Describe el gasto.', 'error');
+  // El corte debe existir antes de agregar gastos
+  if (!D.corte && !(await guardar())) return;
+  try {
+    const r = await apiFin('/finanzas/gastos', { method: 'POST', body: { fecha, tipo: 'dia', concepto_id: conceptoId || null, concepto: $('gTexto').value, monto } });
+    D.gastos.push(r.gasto);
+    $('gMonto').value = ''; $('gTexto').value = '';
+    document.querySelectorAll('.chip').forEach((c) => c.classList.remove('sel'));
+    pintarGastos(); recalcular();
+    toast(`Gasto agregado: ${r.gasto.concepto} ${$m(r.gasto.monto)}`);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function borrarGasto(id) {
+  const g = D.gastos.find((x) => x.id === id);
+  if (!(await preguntar('Borrar gasto', `¿Borrar <b>${esc(g.concepto)} ${$m(g.monto)}</b>? Quedará registrado en Auditoría.`, { boton: 'Borrar', peligro: true }))) return;
+  try { await apiFin(`/finanzas/gastos/${id}`, { method: 'DELETE' }); D.gastos = D.gastos.filter((x) => x.id !== id); pintarGastos(); recalcular(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function cerrar() {
+  if (!(await guardar())) return;
+  const r = D.resumen;
+  const caja = r.diferencia === null ? 'Sin arqueo de caja.' : r.diferencia === 0 ? 'La caja cuadra.' : r.diferencia < 0 ? `<b style="color:var(--red)">Faltan ${$m(-r.diferencia, 2)}</b> en caja.` : `Sobran ${$m(r.diferencia, 2)} en caja.`;
+  if (!(await preguntar('Cerrar corte del día', `Venta total <b>${$m(r.venta_total, 2)}</b> · Efectivo final <b>${$m(r.efectivo_final, 2)}</b>. ${caja}<br><br>Después de cerrar ya no se puede modificar.`, { boton: 'Cerrar corte' }))) return;
+  try { await apiFin('/finanzas/corte/cerrar', { method: 'POST', body: { fecha } }); }
+  catch (e) {
+    if (!/\$0/.test(e.message)) return toast(e.message, 'error');
+    if (!(await preguntar('Venta en $0', 'La venta total está en $0. ¿De verdad no hubo venta este día?', { boton: 'Sí, cerrar' }))) return;
+    try { await apiFin('/finanzas/corte/cerrar', { method: 'POST', body: { fecha, confirmar_sin_venta: true } }); } catch (e2) { return toast(e2.message, 'error'); }
+  }
+  toast('Corte cerrado ✓');
+  cargar();
+}
+
+async function reabrir() {
+  if (!(await preguntar('Reabrir corte', 'El corte volverá a quedar abierto para capturar. Quedará registrado en Auditoría.', { boton: 'Reabrir' }))) return;
+  try { await apiFin('/finanzas/corte/reabrir', { method: 'POST', body: { fecha } }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+
+function irA(f) { fecha = f; history.replaceState(null, '', `?fecha=${f}`); cargar(); }
+function mover(n) { irA(sumarDiasStr(fecha, n)); }
+
+async function pintarSemana() {
+  try {
+    const s = await apiFin(`/finanzas/semana?fecha=${fecha}`);
+    if (!s.dias) return;
+    $('semanaDots').innerHTML = `<div class="semana-dots">${s.dias.map((d) => {
+      const cls = d.fecha === fecha ? 'hoy' : d.estado === 'cerrado' ? 'hecho' : '';
+      return `<div class="${cls}" style="cursor:pointer;" title="${d.estado === 'cerrado' ? 'Cerrado' : d.estado === 'abierto' ? 'Abierto' : 'Sin corte'}" onclick="irA('${d.fecha}')">${DIA_CORTO[d.codigo]}${d.estado === 'cerrado' ? ' ✓' : ''}</div>`;
+    }).join('')}</div>`;
+  } catch (_) {}
+}
+</script>
+</body>
+</html>

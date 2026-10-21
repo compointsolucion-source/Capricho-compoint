@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<title>Nómina y pagos — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="semana-nav"><h1 style="margin-right:12px;">Nómina y pagos</h1><button class="flecha" onclick="mover(-7)">‹</button><div class="rango" id="rango">—</div><button class="flecha" onclick="mover(7)">›</button></div>
+      <div class="botones"><button class="btn-secondary" onclick="window.print()">🖨 Imprimir</button><button class="btn-secondary" id="btnCsv">Excel</button></div>
+    </div>
+    <div id="app"><div class="cargando">Cargando...</div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+let YO = null, N = null, fecha = null;
+const $ = (id) => document.getElementById(id);
+const ESTADO_TXT = { a_tiempo: 'a tiempo', retardo: 'retardo', falta: 'falta', justificado: 'justificado', descanso: 'descanso', festivo: 'festivo', pendiente: 'pendiente' };
+
+(async function inicio() {
+  YO = await iniciarFinanzas(['nomina']);
+  if (!YO) return;
+  fecha = new URLSearchParams(location.search).get('fecha') || YO.dia_operacion;
+  cargar();
+})();
+async function cargar() {
+  try {
+    N = await apiFin(`/finanzas/nomina?fecha=${fecha}`);
+    $('rango').textContent = rangoSemana(N.lunes, N.domingo);
+    pintar();
+  } catch (e) { $('app').innerHTML = `<div class="resultado error">${esc(e.message)}</div>`; }
+}
+function mover(n) { fecha = sumarDiasStr(fecha, n); history.replaceState(null, '', `?fecha=${fecha}`); cargar(); }
+
+function pintar() {
+  const t = N.totales, r = N.reglas, g = N.ganancia;
+  const sinSueldo = N.empleados.filter((e) => e.sin_sueldo);
+  const sinHorario = N.empleados.filter((e) => e.sin_horario);
+  let h = `<div class="kpi-grid">
+    <div class="kpi-card"><div class="label">Sueldos (días checados)</div><div class="value money" style="font-size:24px;">${$m(t.sueldo)}</div><div class="delta">${t.dias_trabajados} días trabajados</div></div>
+    <div class="kpi-card accent-forest"><div class="label">Bonos de puntualidad</div><div class="value money" style="font-size:24px;">${$m(t.bono_puntualidad)}</div><div class="delta">${t.dias_puntuales} de ${t.dias_trabajados} días a tiempo</div></div>
+    <div class="kpi-card"><div class="label">Bonos extra / descuentos</div><div class="value money" style="font-size:24px;color:#4ea8f7;">${$m(t.bonos_extra)}</div><div class="delta">Agregados por ti</div></div>
+    <div class="kpi-card accent-amber"><div class="label">Total nómina</div><div class="value money" style="font-size:24px;">${$m(t.total)}</div><div class="delta">${t.pendiente ? `Pendiente de pagar: <b style="color:var(--amber)">${$m(t.pendiente)}</b>` : 'Todo pagado ✓'}</div></div>
+  </div>`;
+  if (sinSueldo.length) h += `<div class="disclaimer">${sinSueldo.map((e) => esc(e.nombre)).join(', ')}: sin sueldo por día. Asígnalo en <a href="empleados.html" style="text-decoration:underline">Empleados</a> para calcular su pago.</div>`;
+  if (sinHorario.length) h += `<div class="disclaimer">${sinHorario.map((e) => esc(e.nombre)).join(', ')}: sin horario con hora de entrada, no puede ganar bono de puntualidad. Asígnalo en Empleados.</div>`;
+
+  h += `<div class="grid-sem ${g ? 'nomina' : ''}" style="${g ? '' : 'grid-template-columns:1fr;'}"><div class="panel">
+    <div class="panel-head"><h2>Pago por empleado</h2><span style="font-size:11.5px;color:var(--muted-2);">Días y puntualidad tomados del checador · <span style="color:var(--neon)">■</span> a tiempo <span style="color:var(--amber)">■</span> retardo <span style="color:var(--red)">■</span> falta <span style="color:#4ea8f7">■</span> justificado</span></div>
+    <div class="tabla-scroll">${N.empleados.length ? `<table class="checadas"><thead><tr><th>Empleado</th><th>Checadas lun–dom</th><th class="r">Sueldo</th><th class="r">Puntualidad</th><th class="r">Extra</th><th class="r">A pagar</th><th>Pago</th></tr></thead><tbody>
+    ${N.empleados.map((e) => {
+      const p = e.pago;
+      const total = p ? p.total : e.total;
+      return `<tr>
+        <td>${esc(e.nombre)}<span class="chk">${esc(e.puesto || '—')} · ${$m(e.sueldo_diario)}/día</span></td>
+        <td><div class="dias">${e.detalle.map((d) => `<i class="${d.estado}" title="${DIA_NOMBRE[d.codigo]} ${diaMes(d.fecha)}: ${ESTADO_TXT[d.estado]}${d.hora ? ' ' + hhmm(d.hora) : ''}${d.min_tarde ? ' (' + d.min_tarde + ' min tarde)' : ''}">${d.codigo}</i>`).join('')}</div>
+          <span class="chk">${e.dias_trabajados} días · ${e.dias_puntuales} a tiempo${e.retardos ? ` · ${e.retardos} retardo(s)` : ''}${e.faltas ? ` · <span style="color:var(--red)">${e.faltas} falta(s)</span>` : ''}${e.semana_perfecta ? ' · ⭐ semana perfecta' : ''}</span></td>
+        <td class="money">${$m(e.sueldo)}</td>
+        <td class="money pos">+${$m(e.bono_puntualidad)}</td>
+        <td class="money" style="color:#4ea8f7;">${e.bonos_extra ? (e.bonos_extra > 0 ? '+' : '') + $m(e.bonos_extra) : '—'}
+          <div>${e.extras.map((b) => `<span class="extra-tag ${b.monto < 0 ? 'neg' : ''}">${esc(b.concepto)} ${$m(b.monto)}${!p ? `<button class="no-imprimir" title="Quitar" onclick="quitarBono(${b.id})">×</button>` : ''}</span>`).join('')}</div>
+          ${!p ? `<button class="btn-mini no-imprimir" style="margin-top:4px;padding:3px 8px;" onclick="agregarBono(${e.empleado_id}, '${esc(e.nombre).replace(/'/g, '')}')">+ bono</button>` : ''}</td>
+        <td class="money" style="font-weight:700;">${$m(total)}${p && p.diferencia ? `<span class="chk" style="color:var(--amber)" title="Cambió algo después de pagar">${p.diferencia > 0 ? '+' : ''}${$m(p.diferencia)} después del pago</span>` : ''}</td>
+        <td>${p ? `<span class="pagado">✓ ${p.metodo === 'efectivo' ? 'Efectivo' : 'Transf.'}</span><span class="chk">${fechaHora(p.pagado_en)}${p.recibido_en ? '<br>✍️ Recibido por el empleado' : ''}</span>
+            ${YO.permisos.corregir ? `<button class="accion-link rojo no-imprimir" style="font-size:11px;" onclick="deshacer(${p.id}, '${esc(e.nombre).replace(/'/g, '')}')">Deshacer</button>` : ''}`
+          : `<button class="btn-pagar no-imprimir" ${total <= 0 ? 'disabled style="opacity:.4"' : ''} onclick="pagar(${e.empleado_id}, '${esc(e.nombre).replace(/'/g, '')}', ${total})">Pagar</button>`}</td>
+      </tr>`; }).join('')}
+    </tbody><tfoot><tr><td>${t.empleados} empleados</td><td></td><td class="money">${$m(t.sueldo)}</td><td class="money pos">${$m(t.bono_puntualidad)}</td><td class="money" style="color:#4ea8f7;">${$m(t.bonos_extra)}</td><td class="money">${$m(t.total)}</td><td></td></tr></tfoot></table>`
+    : '<div class="empty-state">No hay nómina en esta semana. Asigna a tus empleados un horario y su sueldo por día en Empleados; los días se toman de sus checadas.</div>'}</div></div>`;
+
+  if (g) {
+    h += `<div><div class="panel" style="margin-bottom:18px;"><div class="panel-head"><h2>Ganancia de la semana</h2></div><div class="cuenta">
+      <div class="calc"><span>Venta total</span><span class="money">${$m(g.venta_total)}</span></div>
+      <div class="calc"><span>Gastos, surtida y fijos</span><span class="money neg">−${$m(g.gastos_total - g.nomina)}</span></div>
+      <div class="calc"><span>Comisión terminal (${g.comision_pct}% de ${$m(g.venta_tarjeta)})</span><span class="money neg">−${$m(g.comision_tarjeta)}</span></div>
+      <div class="calc"><span>Nómina pagada</span><span class="money neg">−${$m(g.nomina_pagada)}</span></div>
+      <div class="calc"><span>Nómina por pagar</span><span class="money amb">−${$m(g.nomina_pendiente)}</span></div></div>
+      <div class="ganancia"><div class="lbl">Ganancia final (con todo pagado)</div><div class="big ${g.utilidad < 0 ? 'neg' : ''}">${$m(g.utilidad)}</div>
+        <div class="barra-pago"><span style="width:${t.total ? Math.round(t.pagado / t.total * 100) : 100}%"></span></div>
+        <div class="d">Ya pagaste ${t.pagados} de ${t.empleados} empleados${t.total ? ` (${Math.round(t.pagado / t.total * 100)}%)` : ''}.${t.pendiente ? ` Faltan ${N.empleados.filter((e) => !e.pago).map((e) => esc(e.nombre.split(' ')[0])).join(', ')}.` : ''}</div></div></div>`;
+  } else h += '<div>';
+  h += `<div class="panel"><div class="panel-head"><h2>Reglas de bonos</h2>${YO.tipo === 'admin' ? '<a class="btn-mini no-imprimir" href="configuracion.html#finanzas">Editar</a>' : ''}</div>
+      <div class="regla"><div class="t">Puntualidad: <span class="v">${$m(r.bono_puntualidad)}</span> por día</div><div class="d">Si su primera entrada del día es ${r.tolerancia ? `a más tardar ${r.tolerancia} min después de` : 'antes o a la hora de'} su horario.</div></div>
+      <div class="regla"><div class="t">Semana perfecta: <span class="v">+${$m(r.bono_semana_perfecta)}</span></div><div class="d">Extra si llega a tiempo todos sus días, sin faltas.</div></div>
+      <div class="regla"><div class="t">Con falta en la semana</div><div class="d">${r.pierde_con_falta ? 'Pierde todo el bono de puntualidad de la semana.' : 'Conserva el bono de los días que sí llegó a tiempo.'}</div></div>
+      <div class="regla"><div class="t">Bonos extra <span class="v">a tu elección</span></div><div class="d">Bono ventas, evento, propinas… o descuentos/préstamos con monto negativo.</div></div>
+    </div></div></div>`;
+  $('app').innerHTML = h;
+}
+
+async function agregarBono(id, nombre) {
+  const v = document.createElement('div');
+  v.className = 'ventana';
+  v.innerHTML = `<div class="caja"><h3>Bono extra · ${esc(nombre)}</h3><p>Semana ${rangoSemana(N.lunes, N.domingo)}. Para un descuento o préstamo usa un monto negativo (ej. −500).</p>
+    <div class="field"><label>Motivo</label><input id="bConcepto" class="select-input" list="motivos" placeholder="Bono ventas"><datalist id="motivos"><option>Bono ventas</option><option>Bono evento</option><option>Propinas</option><option>Préstamo</option><option>Descuento</option></datalist></div>
+    <div class="field"><label>Monto</label><input id="bMonto" class="select-input" inputmode="decimal" placeholder="$0"></div>
+    <div class="form-actions" style="justify-content:flex-end;"><button class="btn-secondary" id="bNo">Cancelar</button><button class="btn-primary inline" id="bSi">Agregar</button></div></div>`;
+  document.body.appendChild(v);
+  v.querySelector('#bConcepto').focus();
+  v.querySelector('#bNo').onclick = () => v.remove();
+  v.querySelector('#bSi').onclick = async () => {
+    try {
+      await apiFin('/finanzas/nomina/bonos', { method: 'POST', body: { semana: N.lunes, empleado_id: id, concepto: v.querySelector('#bConcepto').value, monto: v.querySelector('#bMonto').value.replace('−', '-') } });
+      v.remove(); toast('Bono agregado.'); cargar();
+    } catch (e) { toast(e.message, 'error'); }
+  };
+}
+async function quitarBono(id) {
+  if (!(await preguntar('Quitar bono', '¿Quitar este bono extra?', { boton: 'Quitar', peligro: true }))) return;
+  try { await apiFin(`/finanzas/nomina/bonos/${id}`, { method: 'DELETE' }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+async function pagar(id, nombre, total) {
+  const metodo = await preguntar(`Pagar a ${nombre}`, `Total a pagar: <b style="color:var(--neon);font-size:18px;">${$m(total, 2)}</b><br>El empleado podrá ver su recibo en el portal y confirmar con su PIN que lo recibió.`, {
+    boton: 'Registrar pago', campo: { label: 'Forma de pago', html: '<select name="valor" class="select-input"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option></select>' } });
+  if (!metodo) return;
+  try { await apiFin('/finanzas/nomina/pagar', { method: 'POST', body: { semana: N.lunes, empleado_id: id, metodo } }); toast(`Pago a ${nombre} registrado ✓`); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+async function deshacer(id, nombre) {
+  if (!(await preguntar('Deshacer pago', `¿Deshacer el pago registrado a ${esc(nombre)}? Quedará registrado en Auditoría.`, { boton: 'Deshacer', peligro: true }))) return;
+  try { await apiFin(`/finanzas/nomina/pagos/${id}`, { method: 'DELETE' }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+$('btnCsv').onclick = () => {
+  if (!N) return;
+  exportarCsv(`nomina_${N.lunes}_a_${N.domingo}.csv`,
+    ['Empleado', 'Puesto', 'Sueldo por día', 'Días trabajados', 'Días a tiempo', 'Retardos', 'Faltas', 'Sueldo', 'Bono puntualidad', 'Bonos extra', 'Total', 'Pagado', 'Forma de pago'],
+    N.empleados.map((e) => [e.nombre, e.puesto, e.sueldo_diario, e.dias_trabajados, e.dias_puntuales, e.retardos, e.faltas, e.sueldo, e.bono_puntualidad, e.bonos_extra, e.pago ? e.pago.total : e.total, e.pago ? 'Sí' : 'No', e.pago ? e.pago.metodo : '']));
+};
+</script>
+</body>
+</html>

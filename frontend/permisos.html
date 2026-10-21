@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<title>Permisos — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Permisos de finanzas</h1></div>
+    <p style="color:var(--muted);font-size:13px;margin-top:-14px;margin-bottom:20px;">Los empleados con permisos entran en <b style="color:var(--white)">Portal del empleado</b> con su número de empleado y su PIN del checador. Solo ven y capturan lo que actives aquí.</p>
+    <div class="grid-sem" style="grid-template-columns: 1fr 1.25fr;">
+      <div class="panel"><div class="panel-head"><h2>Empleados</h2><input id="buscar" class="select-input" style="width:170px;padding:7px 10px;" placeholder="Buscar..."></div><div id="lista"><div class="cargando">Cargando...</div></div></div>
+      <div class="panel" id="detalle"><div class="empty-state">Elige un empleado de la lista.</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+const P = [
+  ['corte', 'Capturar corte del día', 'Venta total, venta con tarjeta, gastos del día, arqueo de caja y foto de la terminal. Solo el día de operación actual.'],
+  ['surtida', 'Capturar surtida', 'Compras a proveedores y lista del mercado de abastos de la semana actual.'],
+  ['gastos', 'Capturar gastos fijos de la semana', 'Renta, luz, policía, gasto semana, norteño y stripers.'],
+  ['nomina', 'Nómina y pagos', 'Ve cuánto gana cada quien, agrega bonos y registra pagos.', 'Sensible'],
+  ['ver_semana', 'Ver la hoja semanal completa', 'Ve los cortes de todos los días y semanas anteriores. Si está apagado, solo ve lo que captura.'],
+  ['ver_utilidad', 'Ver utilidad y resumen del mes', 'Ve ganancias, cuenta por semana y el resumen mensual.', 'Solo dueño'],
+  ['corregir', 'Corregir cortes cerrados y deshacer pagos', 'Cada corrección queda en Auditoría con quién, cuándo, antes y después.', 'Sensible']
+];
+const CORTO = { corte: 'Corte', surtida: 'Surtida', gastos: 'Gastos', nomina: 'Nómina', ver_semana: 'Semana', ver_utilidad: 'Utilidad', corregir: 'Corregir' };
+let E = [], sel = null, YO = null;
+const $ = (id) => document.getElementById(id);
+(async () => { YO = await iniciarFinanzas(); if (!YO) return; if (YO.tipo !== 'admin') return location.href = 'portal.html'; cargar(); })();
+async function cargar() {
+  try { E = (await apiFin('/finanzas/permisos')).empleados; pintarLista(); if (sel) elegir(sel); } catch (e) { toast(e.message, 'error'); }
+}
+function iniciales(n) { return n.split(' ').slice(0, 2).map((x) => x[0]).join('').toUpperCase(); }
+function pintarLista() {
+  const q = $('buscar').value.trim().toLowerCase();
+  const lista = E.filter((e) => !q || e.nombre.toLowerCase().includes(q));
+  $('lista').innerHTML = lista.map((e) => {
+    const on = Object.keys(CORTO).filter((k) => e.permisos && e.permisos[k]);
+    return `<div class="persona ${sel === e.id ? 'sel' : ''}" style="cursor:pointer;" onclick="elegir(${e.id})">
+      ${e.foto_url ? `<img src="${esc(urlArchivo(e.foto_url))}" style="width:38px;height:38px;border-radius:10px;object-fit:cover;">` : `<div class="av">${esc(iniciales(e.nombre))}</div>`}
+      <div class="n">${esc(e.nombre)}<small>${esc(e.puesto || '—')} · No. ${esc(e.numero_empleado || 'sin número')}</small></div>
+      <div style="text-align:right;">${on.length ? on.map((k) => `<span class="pill-perm on">${CORTO[k]}</span>`).join('') : '<span class="pill-perm">Sin permisos</span>'}</div></div>`;
+  }).join('') || '<div class="empty-state">No hay empleados activos.</div>';
+}
+function elegir(id) {
+  sel = id; pintarLista();
+  const e = E.find((x) => x.id === id);
+  const avisos = [];
+  if (!e.numero_empleado) avisos.push('no tiene <b>número de empleado</b>');
+  if (!e.tiene_pin) avisos.push('no tiene <b>PIN</b>');
+  $('detalle').innerHTML = `<div class="panel-head"><h2>${esc(e.nombre)}${e.puesto ? ' · ' + esc(e.puesto) : ''}</h2><button class="btn-primary inline" style="padding:8px 16px;font-size:12.5px;" onclick="guardar()">Guardar</button></div>
+    ${avisos.length ? `<div class="disclaimer" style="margin:12px 18px 0;">Para entrar al portal le falta: ${avisos.join(' y ')}. Agrégalo en <a href="empleados.html" style="text-decoration:underline">Empleados</a>.</div>` : ''}
+    ${P.map(([k, t, d, tag]) => `<label class="perm" style="cursor:pointer;"><input type="checkbox" data-k="${k}" ${e.permisos && e.permisos[k] ? 'checked' : ''} style="display:none" onchange="this.nextElementSibling.classList.toggle('on', this.checked)"><div class="switch ${e.permisos && e.permisos[k] ? 'on' : ''}"></div>
+      <div><div class="t">${t}${tag ? ` <span class="tag">${tag}</span>` : ''}</div><div class="d">${d}</div></div></label>`).join('')}
+    <div style="padding:14px 18px;background:var(--bg-panel-2);border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);">
+      📅 <b style="color:var(--white)">Regla de captura:</b> solo puede capturar el día de operación actual. El día termina a las <b style="color:var(--neon)">${YO.config.hora_corte_dia}:00 am</b>: lo que se vende después de medianoche cuenta para la noche anterior.</div>`;
+}
+async function guardar() {
+  const permisos = {};
+  document.querySelectorAll('#detalle [data-k]').forEach((c) => { permisos[c.dataset.k] = c.checked; });
+  try { await apiFin(`/finanzas/permisos/${sel}`, { method: 'PUT', body: { permisos } }); toast('Permisos guardados ✓'); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+$('buscar').oninput = pintarLista;
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ const pool = require('../db');
 const { verificarEmpleado } = require('../middleware/auth');
 const { guardarDataUrl, TIPOS_JUSTIFICANTE } = require('../utils/archivos');
 const { ahora } = require('../utils/tiempo');
+const { calcularNomina, semanaDe, config, diaOperacion, PERMISOS } = require('../utils/finanzas');
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.get('/yo', verificarEmpleado, async (req, res, next) => {
   try {
     const id = req.empleado.id;
     const emp = (await pool.query(
-      `SELECT e.id, e.nombre, e.puesto, e.departamento, e.sucursal, e.numero_empleado, e.fecha_ingreso, e.foto_url,
+      `SELECT e.id, e.nombre, e.puesto, e.departamento, e.sucursal, e.numero_empleado, e.fecha_ingreso, e.foto_url, e.permisos,
               h.nombre AS horario_nombre, h.hora_entrada, h.hora_salida, h.dias_semana
        FROM empleados e LEFT JOIN horarios h ON h.id = e.horario_id WHERE e.id = $1`, [id]
     )).rows[0];
@@ -68,6 +69,8 @@ router.get('/yo', verificarEmpleado, async (req, res, next) => {
     const checadas = (await pool.query(
       'SELECT fecha, hora, tipo, metodo FROM checadas WHERE empleado_id = $1 ORDER BY fecha DESC, hora DESC LIMIT 20', [id]
     )).rows;
+    const p = emp.permisos || {};
+    emp.permisos = Object.fromEntries(PERMISOS.map((k) => [k, p[k] === true]));
     res.json({
       empleado: emp,
       vacaciones: diasVacacionesLFT(emp.fecha_ingreso),
@@ -92,6 +95,37 @@ router.post('/solicitudes', verificarEmpleado, async (req, res, next) => {
       [req.empleado.id, b.fecha, b.fecha_fin || null, b.tipo, String(b.comentario || '').trim() || null,
        b.tipo === 'horas_extra' && b.horas ? Number(b.horas) : null, archivoUrl]
     );
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Mis pagos: semana en curso (calculada con el checador) + pagos anteriores
+router.get('/pagos', verificarEmpleado, async (req, res, next) => {
+  try {
+    const conf = await config();
+    const { lunes } = semanaDe(diaOperacion(conf.hora_corte_dia));
+    const actual = (await calcularNomina(lunes, { empleadoId: req.empleado.id })).empleados[0] || null;
+    const { rows } = await pool.query(
+      'SELECT * FROM nomina_pagos WHERE empleado_id = $1 ORDER BY semana DESC LIMIT 12', [req.empleado.id]);
+    res.json({
+      semana_actual: actual ? { lunes, ...actual, reglas: { bono_puntualidad: conf.bono_puntualidad } } : null,
+      pagos: rows.map((p) => ({ ...p, total: Number(p.total), sueldo: Number(p.sueldo), bono_puntualidad: Number(p.bono_puntualidad),
+        bonos_extra: Number(p.bonos_extra), sueldo_diario: Number(p.sueldo_diario) }))
+    });
+  } catch (e) { next(e); }
+});
+
+// "Recibí mi pago": el empleado lo confirma con su PIN (queda como recibo firmado)
+router.post('/pagos/:id/recibido', verificarEmpleado, limiteLogin, async (req, res, next) => {
+  try {
+    const emp = (await pool.query('SELECT pin_hash FROM empleados WHERE id = $1', [req.empleado.id])).rows[0];
+    if (!emp || !emp.pin_hash || !(await bcrypt.compare(String(req.body.pin || ''), emp.pin_hash))) {
+      return res.status(401).json({ error: 'PIN incorrecto.' });
+    }
+    const { rows } = await pool.query(
+      'UPDATE nomina_pagos SET recibido_en = NOW() WHERE id = $1 AND empleado_id = $2 AND recibido_en IS NULL RETURNING id',
+      [req.params.id, req.empleado.id]);
+    if (!rows[0]) return res.status(400).json({ error: 'Ese pago ya estaba confirmado.' });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

@@ -22,13 +22,15 @@ router.get('/archivos/:id', async (req, res, next) => {
 router.use(verificarToken, requiereAdmin);
 
 const TABLAS = ['configuracion', 'configuracion_smtp', 'horarios', 'empleados', 'administradores', 'checadas',
-  'qr_tokens', 'dias_festivos', 'incidencias', 'auditoria_checadas', 'archivos'];
+  'qr_tokens', 'dias_festivos', 'incidencias', 'auditoria_checadas', 'archivos',
+  'conceptos_gasto', 'cortes', 'gastos', 'bonos_extra', 'nomina_pagos', 'auditoria_finanzas'];
 
 function literal(v) {
   if (v === null || v === undefined) return 'NULL';
   if (Buffer.isBuffer(v)) return `'\\x${v.toString('hex')}'::bytea`;
   if (v instanceof Date) return `'${v.toISOString()}'`;
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'object') return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
@@ -73,11 +75,11 @@ router.get('/respaldo', async (req, res, next) => {
 router.get('/conteos', async (req, res, next) => {
   try {
     const q = (t) => pool.query(`SELECT COUNT(*)::int AS n FROM ${t}`).then((r) => r.rows[0].n);
-    const [empleados, checadas, horarios, incidencias, usuarios, festivos, archivos] = await Promise.all(
-      ['empleados', 'checadas', 'horarios', 'incidencias', 'administradores', 'dias_festivos', 'archivos'].map(q)
+    const [empleados, checadas, horarios, incidencias, usuarios, festivos, archivos, cortes, gastos] = await Promise.all(
+      ['empleados', 'checadas', 'horarios', 'incidencias', 'administradores', 'dias_festivos', 'archivos', 'cortes', 'gastos'].map(q)
     );
     const tam = (await pool.query('SELECT pg_database_size(current_database())::bigint AS b')).rows[0].b;
-    res.json({ empleados, checadas, horarios, incidencias, usuarios, festivos, archivos, tamano_bytes: Number(tam) });
+    res.json({ empleados, checadas, horarios, incidencias, usuarios, festivos, archivos, cortes, gastos, tamano_bytes: Number(tam) });
   } catch (e) { next(e); }
 });
 
@@ -94,11 +96,11 @@ router.post('/reinicio', async (req, res, next) => {
     await c.query('BEGIN');
     let mensaje = '';
     if (nivel === 'historial') {
-      await c.query('DELETE FROM checadas; DELETE FROM auditoria_checadas; DELETE FROM incidencias; DELETE FROM qr_tokens;');
-      mensaje = 'Se borró todo el historial de asistencia (checadas, auditoría, incidencias). Empleados, horarios y usuarios se conservaron.';
+      await c.query('DELETE FROM checadas; DELETE FROM auditoria_checadas; DELETE FROM incidencias; DELETE FROM qr_tokens; DELETE FROM nomina_pagos; DELETE FROM bonos_extra; DELETE FROM gastos; DELETE FROM cortes; DELETE FROM auditoria_finanzas;');
+      mensaje = 'Se borró todo el historial (checadas, incidencias, cortes, gastos, nómina pagada y auditorías). Empleados, horarios, proveedores y usuarios se conservaron.';
     } else {
       await c.query('UPDATE administradores SET empleado_id = NULL');
-      await c.query('DELETE FROM empleados; DELETE FROM horarios; DELETE FROM dias_festivos; DELETE FROM qr_tokens; DELETE FROM archivos;');
+      await c.query('DELETE FROM gastos; DELETE FROM cortes; DELETE FROM auditoria_finanzas; DELETE FROM empleados; DELETE FROM horarios; DELETE FROM dias_festivos; DELETE FROM qr_tokens; DELETE FROM archivos;');
       mensaje = 'Se borraron empleados, horarios, días festivos e historial completo. Los usuarios y la configuración se conservaron.';
       if (nivel === 'fabrica') {
         await c.query('DELETE FROM administradores WHERE id <> $1', [req.usuario.id]);

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<link rel="stylesheet" href="css/finanzas.css">
+<title>Semana — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="semana-nav"><h1 style="margin-right:12px;" id="titulo">Semana</h1><button class="flecha" onclick="mover(-7)">‹</button><div class="rango" id="rango">—</div><button class="flecha" onclick="mover(7)">›</button></div>
+      <div class="botones"><button class="btn-secondary" onclick="window.print()">🖨 Imprimir hoja</button><button class="btn-secondary" id="btnCsv">Excel</button></div>
+    </div>
+    <div id="app"><div class="cargando">Cargando...</div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+let YO = null, S = null, CONCEPTOS = [], fecha = null;
+const $ = (id) => document.getElementById(id);
+const TITULOS = { semanal: 'Gastos fijos de la semana', proveedor: 'Surtida semanal (proveedores)', abastos: 'Surtida mercado de abastos' };
+
+(async function inicio() {
+  YO = await iniciarFinanzas(['ver_semana', 'surtida', 'gastos']);
+  if (!YO) return;
+  if (!YO.permisos.ver_semana) $('titulo').textContent = 'Gastos y surtida';
+  fecha = new URLSearchParams(location.search).get('fecha') || YO.dia_operacion;
+  try { CONCEPTOS = await apiFin('/finanzas/conceptos'); } catch (_) {}
+  cargar();
+})();
+
+async function cargar() {
+  try {
+    S = await apiFin(`/finanzas/semana?fecha=${fecha}`);
+    $('rango').textContent = rangoSemana(S.lunes, S.domingo);
+    pintar();
+  } catch (e) { $('app').innerHTML = `<div class="resultado error">${esc(e.message)}</div>`; }
+}
+function mover(n) { fecha = sumarDiasStr(fecha, n); history.replaceState(null, '', `?fecha=${fecha}`); cargar(); }
+function delta(act, ant) {
+  if (!ant) return '<span class="muted">Sin datos de la semana anterior</span>';
+  const p = Math.round((act - ant) / Math.abs(ant) * 100);
+  return `<b style="color:${p >= 0 ? 'var(--neon)' : 'var(--red)'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p)}%</b> vs semana anterior`;
+}
+
+function pintar() {
+  const p = S.permisos, c = S.cuenta;
+  let h = '';
+  if (c) {
+    h += `<div class="kpi-grid">
+      <div class="kpi-card"><div class="label">Venta total</div><div class="value money" style="font-size:26px;">${$m(c.venta_total)}</div><div class="delta">${delta(c.venta_total, S.anterior && S.anterior.venta_total)}</div></div>
+      <div class="kpi-card accent-amber"><div class="label">Venta con tarjeta</div><div class="value money" style="font-size:26px;">${$m(c.venta_tarjeta)}</div><div class="delta">${c.venta_total ? Math.round(c.venta_tarjeta / c.venta_total * 100) : 0}% de la venta · comisión ${$m(c.comision_tarjeta)}</div></div>
+      <div class="kpi-card accent-red"><div class="label">Gastos totales</div><div class="value money" style="font-size:26px;">${$m(c.gastos_total + c.comision_tarjeta)}</div><div class="delta">${c.venta_total ? Math.round((c.gastos_total + c.comision_tarjeta) / c.venta_total * 100) : 0}% de la venta</div></div>
+      <div class="kpi-card accent-forest destacada"><div class="label">Utilidad semanal</div><div class="value money" style="font-size:26px;${c.utilidad < 0 ? 'color:var(--red);text-shadow:none;' : ''}">${$m(c.utilidad)}</div><div class="delta">${delta(c.utilidad, S.anterior && S.anterior.utilidad)}</div></div>
+    </div>`;
+  }
+  if (S.dias || c) {
+    h += `<div class="grid-sem">`;
+    if (S.dias) {
+      const tot = S.dias.reduce((t, d) => ({ v: t.v + d.venta_total, t: t.t + d.venta_tarjeta, g: t.g + d.gastos, f: t.f + d.efectivo_final, c: t.c + (d.diferencia_caja || 0) }), { v: 0, t: 0, g: 0, f: 0, c: 0 });
+      h += `<div class="panel"><div class="panel-head"><h2>Cortes del día</h2><span style="font-size:11.5px;color:var(--muted-2);">Toca un día para ver o capturar su corte</span></div><div class="tabla-scroll">
+        <table class="checadas"><thead><tr><th>Día</th><th class="r">Venta total</th><th class="r">Tarjeta</th><th class="r">Gastos día</th><th class="r">Efectivo final</th><th class="r">Caja</th><th>Estado</th></tr></thead><tbody>
+        ${S.dias.map((d) => `<tr class="fila-click" onclick="location.href='corte.html?fecha=${d.fecha}'">
+          <td>${DIA_NOMBRE[d.codigo]} ${diaMes(d.fecha)}${!d.opera ? ' <span class="muted">(extra)</span>' : ''}${d.destacados.length ? `<span class="sub-celda" style="margin-left:0">incluye ${esc(d.destacados.join(', '))}</span>` : ''}</td>
+          <td class="money">${d.corte_id ? $m(d.venta_total) : '—'}</td><td class="money">${d.corte_id ? $m(d.venta_tarjeta) : '—'}</td>
+          <td class="money">${d.gastos ? $m(d.gastos) : '—'}</td><td class="money pos">${d.corte_id ? $m(d.efectivo_final) : '—'}</td>
+          <td class="money ${d.diferencia_caja < 0 ? 'neg' : d.diferencia_caja > 0 ? 'amb' : ''}">${d.diferencia_caja === null ? (d.corte_id ? '<span class="muted" title="Sin arqueo de caja">s/a</span>' : '—') : d.diferencia_caja === 0 ? '✓' : (d.diferencia_caja > 0 ? '+' : '') + $m(d.diferencia_caja)}</td>
+          <td><span class="estado ${d.estado === 'cerrado' ? 'cerrado' : d.estado === 'abierto' ? 'abierto' : 'cerrado-dia'}">${d.estado === 'cerrado' ? 'Cerrado' : d.estado === 'abierto' ? 'Abierto' : 'Sin corte'}</span></td></tr>`).join('')}
+        </tbody><tfoot><tr><td>Total semana</td><td class="money">${$m(tot.v)}</td><td class="money">${$m(tot.t)}</td><td class="money">${$m(tot.g)}</td><td class="money pos">${$m(tot.f)}</td><td class="money ${tot.c < 0 ? 'neg' : ''}">${tot.c ? $m(tot.c) : ''}</td><td></td></tr></tfoot></table></div></div>`;
+    }
+    if (c) {
+      h += `<div class="panel"><div class="panel-head"><h2>Cuenta por semana</h2></div><div class="cuenta">
+        <div class="calc"><span>Venta total</span><span class="money">${$m(c.venta_total, 2)}</span></div>
+        <div class="calc"><span>Venta tarjeta</span><span class="money">${$m(c.venta_tarjeta, 2)}</span></div>
+        <div class="calc"><span>Gastos del día (cortes)</span><span class="money neg">−${$m(c.gastos_dia, 2)}</span></div>
+        <div class="calc"><span>Gastos fijos de la semana</span><span class="money neg">−${$m(c.gastos_semanal, 2)}</span></div>
+        <div class="calc"><span>Nómina y bonos <a href="nomina.html?fecha=${S.lunes}" class="no-imprimir" style="color:var(--neon);font-size:11px;">ver</a></span><span class="money neg">−${$m(c.nomina, 2)}</span></div>
+        <div class="calc"><span>Surtida proveedores</span><span class="money neg">−${$m(c.surtida_proveedor, 2)}</span></div>
+        <div class="calc"><span>Surtida mercado de abastos</span><span class="money neg">−${$m(c.surtida_abastos, 2)}</span></div>
+        <div class="calc"><span style="font-weight:700;">Efectivo final</span><span class="money" style="font-weight:700;">${$m(c.efectivo_final, 2)}</span></div>
+        <div class="calc"><span>Comisión terminal (${c.comision_pct}%)</span><span class="money neg">−${$m(c.comision_tarjeta, 2)}</span></div>
+      </div>
+      <div class="ganancia"><div class="lbl">Utilidad semanal (con todo pagado)</div><div class="big ${c.utilidad < 0 ? 'neg' : ''}">${$m(c.utilidad, 2)}</div>
+        <div class="barra-pago"><span style="width:${c.nomina ? Math.round(c.nomina_pagada / c.nomina * 100) : 100}%"></span></div>
+        <div class="d">Nómina pagada ${$m(c.nomina_pagada)} de ${$m(c.nomina)}${c.nomina_pendiente ? ` · <b style="color:var(--amber)">falta pagar ${$m(c.nomina_pendiente)}</b>` : ' · todo pagado ✓'}
+        ${c.diferencia_caja ? `<br>Diferencias de caja: <b style="color:${c.diferencia_caja < 0 ? 'var(--red)' : 'var(--amber)'}">${$m(c.diferencia_caja, 2)}</b>` : ''}
+        ${c.dias_cerrados < c.dias_con_corte || c.dias_con_corte < c.dias_operacion ? `<br><span style="color:var(--amber)">Cortes cerrados: ${c.dias_cerrados} de ${c.dias_operacion} días</span>` : ''}</div></div></div>`;
+    }
+    h += `</div>`;
+  }
+
+  h += `<div class="grid-3" style="margin-bottom:18px;">`;
+  if (S.grupos) {
+    const auto = c ? [['Nómina', c.nomina], ['Surtida proveedor', c.surtida_proveedor], ['Surtida abastos', c.surtida_abastos]] : [];
+    const total = S.grupos.reduce((s, g) => s + g.monto, 0) + auto.reduce((s, a) => s + a[1], 0);
+    h += `<div class="panel"><div class="panel-head"><h2>Gastos semanales</h2></div><div class="lista-mini">
+      ${S.grupos.map((g) => `<div class="li"><span>${esc(g.nombre)}${g.desde_cortes ? '<span class="auto">de los cortes</span>' : ''}</span><span class="money">${$m(g.monto)}</span></div>`).join('')}
+      ${auto.map(([n, v]) => `<div class="li"><span>${n}<span class="auto">auto</span></span><span class="money">${$m(v)}</span></div>`).join('')}
+      <div class="li total"><span>Total</span><span class="money">${$m(total)}</span></div></div></div>`;
+  }
+  if (S.nomina) {
+    h += `<div class="panel"><div class="panel-head"><h2>Nómina y bono</h2><a class="btn-mini no-imprimir" href="nomina.html?fecha=${S.lunes}">Pagar / ver detalle</a></div>
+      ${S.nomina.empleados.length ? `<table class="checadas"><thead><tr><th>Empleado</th><th class="r">Nómina</th><th class="r">Bonos</th><th></th></tr></thead><tbody>
+      ${S.nomina.empleados.map((e) => `<tr><td>${esc(e.nombre)}<span class="sub-celda" style="margin-left:0">${esc(e.puesto || '')} · ${e.dias_trabajados} días</span></td><td class="money">${$m(e.sueldo)}</td><td class="money">${$m(e.bono_puntualidad + e.bonos_extra)}</td><td>${e.pagado ? '<span class="pagado">✓</span>' : '<span class="estado abierto">Pend.</span>'}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td>Total <span class="pos">${$m(S.nomina.totales.total)}</span></td><td class="money">${$m(S.nomina.totales.sueldo)}</td><td class="money">${$m(S.nomina.totales.bono_puntualidad + S.nomina.totales.bonos_extra)}</td><td></td></tr></tfoot></table>`
+      : '<div class="empty-state">Sin nómina esta semana. Asigna el sueldo por día en Empleados.</div>'}</div>`;
+  }
+  if (p.ver_semana || p.gastos) h += seccion('semanal');
+  if (p.ver_semana || p.surtida) h += seccion('proveedor');
+  h += `</div>`;
+  if (p.ver_semana || p.surtida) h += `<div style="margin-bottom:18px;">${seccion('abastos')}</div>`;
+  $('app').innerHTML = h;
+  document.querySelectorAll('.add-linea').forEach((f) => f.onsubmit = agregarLibre);
+}
+
+// Sección de captura: catálogo con total de la semana + botón "+" por concepto
+function seccion(tipo) {
+  const editable = tipo === 'semanal' ? S.editable.gastos : S.editable.surtida;
+  const cat = CONCEPTOS.filter((k) => k.tipo === tipo);
+  const gastos = S.gastos.filter((g) => g.tipo === tipo);
+  const total = gastos.reduce((s, g) => s + g.monto, 0);
+  const sumaDe = (k) => gastos.filter((g) => g.concepto_id === k.id).reduce((s, g) => s + g.monto, 0);
+  const libres = gastos.filter((g) => !cat.some((k) => k.id === g.concepto_id));
+  const fila = (k) => {
+    const wa = linkWhatsApp(k.telefono);
+    return `<div class="fila-cat"><span>${esc(k.nombre)}${k.telefono ? `<span class="sub">${esc(k.telefono.replace(/(\d{2})(\d{4})(\d{4})/, '$1 $2 $3'))}</span>` : ''}${k.ubicacion ? `<span class="sub">📍 ${esc(k.ubicacion)}</span>` : ''}</span>
+      <span class="der">${wa ? `<a class="wa no-imprimir" href="${wa}" target="_blank">WhatsApp</a>` : ''}<span class="money ${sumaDe(k) ? '' : 'muted'}">${sumaDe(k) ? $m(sumaDe(k)) : '—'}</span>
+      ${editable ? `<button class="btn-mas no-imprimir" title="Agregar" onclick="agregar('${tipo}', ${k.id})">+</button>` : ''}</span></div>`;
+  };
+  return `<div class="panel"><div class="panel-head"><h2>${TITULOS[tipo]}</h2><span class="money" style="font-weight:700;">${$m(total)}</span></div>
+    <div>${cat.map(fila).join('')}${libres.map((g) => `<div class="fila-cat"><span>${esc(g.concepto)}</span><span class="money">${$m(g.monto)}</span></div>`).join('')}</div>
+    ${gastos.length ? `<div class="entradas"><div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin-bottom:4px;">Movimientos</div>
+      ${gastos.map((g) => `<div class="e"><span>${fechaCorta(g.fecha).slice(0, 5)} · <b>${esc(g.concepto)}</b> ${g.nota ? '· ' + esc(g.nota) : ''} <span class="muted">(${esc(g.capturado_por || '')})</span></span>
+        <span><span class="money">${$m(g.monto)}</span>${editable ? ` <button class="borrar no-imprimir" style="background:none;border:none;color:var(--muted-2);cursor:pointer;" onclick="borrar(${g.id})">×</button>` : ''}</span></div>`).join('')}</div>` : ''}
+    ${editable ? `<form class="add-linea" data-tipo="${tipo}"><input name="concepto" placeholder="Otro concepto"><input name="monto" inputmode="decimal" placeholder="$ monto"><button class="btn-mini" type="submit">Agregar</button></form>` : ''}
+  </div>`;
+}
+
+function fechaCaptura() { return YO.dia_operacion >= S.lunes && YO.dia_operacion <= S.domingo ? YO.dia_operacion : S.lunes; }
+
+async function agregar(tipo, conceptoId) {
+  const k = CONCEPTOS.find((x) => x.id === conceptoId);
+  const v = await preguntar(`Agregar: ${k.nombre}`, `${TITULOS[tipo]} · semana ${rangoSemana(S.lunes, S.domingo)}`, {
+    boton: 'Agregar', campo: { label: 'Monto', html: `<input name="valor" class="select-input" inputmode="decimal" value="${k.monto_sugerido || ''}" placeholder="$0">` } });
+  if (!v) return;
+  try { await apiFin('/finanzas/gastos', { method: 'POST', body: { fecha: fechaCaptura(), tipo, concepto_id: conceptoId, monto: v } }); toast(`${k.nombre}: ${$m(numero(v))} agregado.`); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+async function agregarLibre(ev) {
+  ev.preventDefault();
+  const f = ev.target, tipo = f.dataset.tipo;
+  try { await apiFin('/finanzas/gastos', { method: 'POST', body: { fecha: fechaCaptura(), tipo, concepto: f.concepto.value, monto: f.monto.value } }); toast('Agregado.'); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+async function borrar(id) {
+  const g = S.gastos.find((x) => x.id === id);
+  if (!(await preguntar('Borrar movimiento', `¿Borrar <b>${esc(g.concepto)} ${$m(g.monto)}</b>? Quedará en Auditoría.`, { boton: 'Borrar', peligro: true }))) return;
+  try { await apiFin(`/finanzas/gastos/${id}`, { method: 'DELETE' }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+
+$('btnCsv').onclick = () => {
+  if (!S) return;
+  const filas = [];
+  (S.dias || []).forEach((d) => filas.push(['Corte', d.fecha, `${DIA_NOMBRE[d.codigo]}`, d.venta_total, d.venta_tarjeta, d.gastos, d.efectivo_final, d.diferencia_caja ?? '']));
+  S.gastos.forEach((g) => filas.push(['Gasto ' + g.tipo, g.fecha, g.concepto, '', '', g.monto, '', '']));
+  if (S.cuenta) {
+    const c = S.cuenta;
+    [['Venta total', c.venta_total], ['Venta tarjeta', c.venta_tarjeta], ['Gastos del día', c.gastos_dia], ['Gastos fijos', c.gastos_semanal], ['Nómina', c.nomina],
+     ['Surtida proveedores', c.surtida_proveedor], ['Surtida abastos', c.surtida_abastos], ['Comisión terminal', c.comision_tarjeta], ['Efectivo final', c.efectivo_final], ['Utilidad', c.utilidad]]
+      .forEach(([n, v]) => filas.push(['Cuenta', '', n, '', '', '', v, '']));
+  }
+  exportarCsv(`semana_${S.lunes}_a_${S.domingo}.csv`, ['Sección', 'Fecha', 'Concepto', 'Venta total', 'Tarjeta', 'Gasto', 'Efectivo/Total', 'Diferencia caja'], filas);
+};
+</script>
+</body>
+</html>
