@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Checador — Capricho-compoint</title>
+<script src="js/vendor/qrcode-generator.js"></script>
+</head>
+<body>
+<a href="dashboard.html" class="qr-salir">← Volver al panel</a>
+<div class="qr-screen">
+  <div class="logo-chip"><img src="img/logo.png" alt="Compoint"></div>
+  <div class="qr-reloj" id="reloj">--:--:--</div>
+  <h1>Escanea para registrar tu entrada o salida</h1>
+  <div class="qr-box" id="qrcode"></div>
+  <div class="qr-barra"><span id="barra" style="width:100%"></span></div>
+  <p class="instruccion">
+    Abre la cámara de tu celular y apunta al código. Este QR se renueva cada <strong id="seg">25 segundos</strong> por seguridad.
+  </p>
+  <div class="qr-ultima" id="estado"></div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+if (!getToken()) location.href = 'login.html';
+// La URL que se abre en el celular: checar.html en esta misma página web
+const BASE_CHECAR = location.href.replace(/pantalla-qr\.html.*$/, 'checar.html');
+let segundos = 25, restante = 0;
+
+async function renovar() {
+  try {
+    const r = await api('/qr/token', { method: 'POST' });
+    segundos = r.segundos;
+    restante = segundos;
+    document.getElementById('seg').textContent = `${segundos} segundos`;
+    const q = qrcode(0, 'M');
+    q.addData(`${BASE_CHECAR}?t=${r.token}`);
+    q.make();
+    const celda = Math.max(2, Math.floor(300 / q.getModuleCount()));
+    document.getElementById('qrcode').innerHTML = q.createSvgTag({ cellSize: celda, margin: 0, scalable: false });
+    document.getElementById('estado').textContent = '';
+  } catch (e) {
+    document.getElementById('estado').textContent = 'Sin conexión con el servidor. Reintentando...';
+    restante = 5;
+  }
+}
+function tic() {
+  document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+  restante--;
+  document.getElementById('barra').style.width = `${Math.max(restante, 0) / segundos * 100}%`;
+  if (restante <= 0) renovar();
+}
+renovar();
+setInterval(tic, 1000);
+// Mantener la pantalla encendida si el navegador lo permite
+if ('wakeLock' in navigator) {
+  const pedir = () => navigator.wakeLock.request('screen').catch(() => {});
+  pedir();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pedir(); });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Reportes — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Reportes</h1></div>
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="filtros">
+        <div class="field"><label>Desde</label><input type="date" id="desde"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="hasta"></div>
+        <div class="field"><label>Empleado</label><select id="selEmp"><option value="">Todos</option></select></div>
+        <button class="btn-primary inline" id="btnVer">Ver reporte</button>
+        <button class="btn-secondary" id="btnCsv">Exportar a Excel (CSV)</button>
+      </div>
+      <div class="atajos-fecha" style="padding:0 20px 6px;">
+        <button class="atajo-btn" data-r="hoy">Hoy</button>
+        <button class="atajo-btn" data-r="semana">Esta semana</button>
+        <button class="atajo-btn" data-r="mes">Este mes</button>
+        <button class="atajo-btn" data-r="mesant">Mes anterior</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">Checadas</div><div class="value" id="kCh">—</div></div>
+      <div class="kpi-card accent-forest"><div class="label">Empleados</div><div class="value" id="kEmp">—</div></div>
+      <div class="kpi-card accent-amber"><div class="label">Retardos</div><div class="value" id="kRet">—</div></div>
+      <div class="kpi-card accent-red"><div class="label">Salidas anticipadas</div><div class="value" id="kAnt">—</div></div>
+    </div>
+
+    <div class="config-grid" style="margin-bottom:20px;">
+      <div class="panel"><div class="panel-head"><h2>Retardos por departamento</h2></div><div id="deptos"></div></div>
+      <div class="panel"><div class="panel-head"><h2>Resumen por empleado</h2></div><div id="resumen" class="tabla-scroll"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Detalle de checadas</h2></div>
+      <div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel();
+const $ = (id) => document.getElementById(id);
+const hoy = hoyMx();
+$('desde').value = hoy.slice(0, 8) + '01';
+$('hasta').value = hoy;
+let datos = null;
+
+api('/empleados').then((es) => {
+  $('selEmp').innerHTML = '<option value="">Todos</option>' + es.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+}).catch(() => {});
+
+async function cargar() {
+  try {
+    const q = new URLSearchParams({ desde: $('desde').value, hasta: $('hasta').value });
+    if ($('selEmp').value) q.set('empleado_id', $('selEmp').value);
+    datos = await api('/reportes/checadas?' + q);
+    $('kCh').textContent = datos.kpis.checadas;
+    $('kEmp').textContent = datos.kpis.empleados;
+    $('kRet').textContent = datos.kpis.retardos;
+    $('kAnt').textContent = datos.kpis.anticipadas;
+    const max = Math.max(1, ...datos.por_departamento.map((d) => d.retardos));
+    $('deptos').innerHTML = datos.por_departamento.length ? `<div class="barras">${datos.por_departamento.map((d) =>
+      `<div class="barra-fila"><span class="nombre">${esc(d.departamento)}</span><div class="pista"><div class="relleno" style="width:${d.retardos / max * 100}%"></div></div><span class="valor">${d.retardos}</span></div>`).join('')}</div>`
+      : '<div class="empty-state">Sin retardos en este periodo.</div>';
+    $('resumen').innerHTML = datos.resumen.length ? `<table class="checadas"><thead><tr><th>Empleado</th><th>Checadas</th><th>Retardos</th><th>Anticipadas</th></tr></thead><tbody>
+      ${datos.resumen.map((r) => `<tr><td>${esc(r.nombre)}</td><td class="num-cell">${r.checadas}</td><td class="num-cell" style="color:${r.retardos ? 'var(--amber)' : 'inherit'}">${r.retardos}</td><td class="num-cell">${r.anticipadas}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty-state">Sin datos.</div>';
+    $('tabla').innerHTML = datos.registros.length ? `<table class="checadas"><thead><tr><th>Fecha</th><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Método</th><th>Incidencia</th></tr></thead><tbody>
+      ${datos.registros.map((r) => `<tr class="${r.min_retardo !== null || r.min_anticipada !== null ? 'fila-retardo' : ''}">
+        <td class="hora">${fechaCorta(r.fecha)}</td><td class="hora">${hhmmss(r.hora)}</td>
+        <td>${esc(r.nombre)}<span class="sub-celda" style="margin-left:0">${esc(r.departamento || '')}</span></td>
+        <td>${r.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
+        <td style="text-transform:capitalize;font-size:12.5px;" class="${r.metodo === 'manual' ? 'metodo-manual' : ''}">${esc(r.metodo)}${r.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
+        <td>${r.min_retardo !== null ? `<span class="badge badge-retardo">Retardo ${r.min_retardo} min</span>` : r.min_anticipada !== null ? `<span class="badge badge-retardo">Salió ${r.min_anticipada} min antes</span>` : '—'}</td>
+      </tr>`).join('')}</tbody></table>` : '<div class="empty-state">No hay checadas en este periodo.</div>';
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+document.querySelectorAll('.atajo-btn').forEach((b) => b.onclick = () => {
+  const r = b.dataset.r;
+  if (r === 'hoy') { $('desde').value = hoy; $('hasta').value = hoy; }
+  if (r === 'semana') { const dia = (new Date(hoy + 'T12:00:00').getDay() + 6) % 7; $('desde').value = sumarDiasStr(hoy, -dia); $('hasta').value = hoy; }
+  if (r === 'mes') { $('desde').value = hoy.slice(0, 8) + '01'; $('hasta').value = hoy; }
+  if (r === 'mesant') { const fin = sumarDiasStr(hoy.slice(0, 8) + '01', -1); $('desde').value = fin.slice(0, 8) + '01'; $('hasta').value = fin; }
+  cargar();
+});
+$('btnVer').onclick = cargar;
+$('btnCsv').onclick = () => {
+  if (!datos) return;
+  exportarCsv(`reporte_${datos.desde}_a_${datos.hasta}.csv`,
+    ['Fecha', 'Hora', 'Empleado', 'Puesto', 'Departamento', 'Tipo', 'Método', 'Verificado facial', 'Minutos de retardo', 'Minutos de salida anticipada'],
+    datos.registros.map((r) => [r.fecha, hhmmss(r.hora), r.nombre, r.puesto, r.departamento, r.tipo, r.metodo, r.verificado_facial ? 'Sí' : 'No', r.min_retardo ?? '', r.min_anticipada ?? '']));
+};
+cargar();
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Respaldos — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Respaldos</h1></div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">Empleados</div><div class="value" id="cEmp">—</div></div>
+      <div class="kpi-card accent-forest"><div class="label">Checadas</div><div class="value" id="cCh">—</div></div>
+      <div class="kpi-card"><div class="label">Incidencias</div><div class="value" id="cInc">—</div></div>
+      <div class="kpi-card accent-amber"><div class="label">Tamaño de la base</div><div class="value" id="cTam" style="font-size:24px;">—</div></div>
+    </div>
+    <div class="respaldo-cta">
+      <div>
+        <div style="font-weight:700;">Descargar respaldo completo</div>
+        <div style="font-size:12.5px;color:var(--muted);">Un archivo .sql con toda la información (empleados, checadas, incidencias, usuarios y fotos).</div>
+      </div>
+      <div class="form-actions" style="margin:0;">
+        <button class="btn-primary inline" id="btnTodo">Descargar con fotos</button>
+        <button class="btn-secondary" id="btnSinFotos">Sin fotos (más ligero)</button>
+      </div>
+    </div>
+    <div class="instrucciones">
+      <div class="paso"><b>Respaldo automático:</b> la base de datos está en Neon, que guarda por su cuenta un historial de cambios (restaurar a cualquier momento de las últimas 6 horas en el plan gratuito, más en planes de pago) desde <code>console.neon.tech</code> → proyecto <code>Capricho-compoint</code> → <code>Restore</code>.</div>
+      <div class="paso"><b>Recomendación:</b> descarga un respaldo cada semana (por ejemplo, cada viernes después del corte de pre-nómina) y guárdalo en tu computadora o en Drive.</div>
+      <div class="paso"><b>Para restaurar un archivo:</b> en Neon abre el <code>SQL Editor</code>, pega el contenido del archivo y dale <code>Run</code>. Reemplaza toda la información actual por la del respaldo.</div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+api('/conteos').then((c) => {
+  document.getElementById('cEmp').textContent = c.empleados;
+  document.getElementById('cCh').textContent = c.checadas;
+  document.getElementById('cInc').textContent = c.incidencias;
+  document.getElementById('cTam').textContent = (c.tamano_bytes / 1048576).toFixed(1) + ' MB';
+}).catch((e) => toast(e.message, 'error'));
+async function bajar(sinFotos, btn) {
+  btn.disabled = true;
+  try { await descargar('/respaldo' + (sinFotos ? '?sin_fotos=1' : ''), 'respaldo.sql'); toast('Respaldo descargado.'); }
+  catch (e) { toast(e.message, 'error'); }
+  btn.disabled = false;
+}
+document.getElementById('btnTodo').onclick = (e) => bajar(false, e.target);
+document.getElementById('btnSinFotos').onclick = (e) => bajar(true, e.target);
+</script>
+</body>
+</html>

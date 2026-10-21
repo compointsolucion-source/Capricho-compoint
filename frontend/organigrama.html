@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Organigrama — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Organigrama</h1></div>
+    <p style="color:var(--muted);font-size:13px;margin-top:-14px;margin-bottom:20px;">El jefe directo decide quién aprueba las incidencias de cada empleado (cuando ese jefe tiene usuario de Supervisor).</p>
+    <div class="panel form-panel">
+      <div class="panel-head"><h2>Asignar jefe directo</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid cols-org">
+          <div class="field"><label>Empleado</label><select name="empleado_id" id="selEmp" required></select></div>
+          <div class="field"><label>Su jefe directo</label><select name="jefe_directo_id" id="selJefe"></select></div>
+          <div class="field"><button type="submit" class="btn-primary inline">Guardar</button></div>
+        </div>
+      </form>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Estructura</h2></div>
+      <div class="panel-body" id="arbol"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+let empleados = [];
+
+async function cargar() {
+  try {
+    empleados = (await api('/empleados')).filter((e) => e.activo);
+    const opts = empleados.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+    document.getElementById('selEmp').innerHTML = '<option value="">— Selecciona —</option>' + opts;
+    document.getElementById('selJefe').innerHTML = '<option value="">— Sin jefe (nivel superior) —</option>' + opts;
+    const ids = new Set(empleados.map((e) => e.id));
+    const hijos = {};
+    empleados.forEach((e) => { const j = e.jefe_directo_id && ids.has(e.jefe_directo_id) ? e.jefe_directo_id : 0; (hijos[j] ||= []).push(e); });
+    const pintar = (jefe, nivel) => (hijos[jefe] || []).map((e) =>
+      `<div class="org-nodo" style="margin-left:${nivel * 28}px;"><span class="org-nombre">${esc(e.nombre)}</span>${e.puesto ? `<span class="org-puesto">${esc(e.puesto)}</span>` : ''}${e.departamento ? `<span class="org-puesto">${esc(e.departamento)}</span>` : ''}</div>` + pintar(e.id, nivel + 1)).join('');
+    document.getElementById('arbol').innerHTML = empleados.length ? pintar(0, 0) : '<div class="empty-state">No hay empleados activos.</div>';
+  } catch (e) { toast(e.message, 'error'); }
+}
+document.getElementById('selEmp').onchange = (e) => {
+  const emp = empleados.find((x) => x.id === Number(e.target.value));
+  document.getElementById('selJefe').value = emp && emp.jefe_directo_id ? emp.jefe_directo_id : '';
+};
+document.getElementById('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const id = document.getElementById('selEmp').value;
+  if (!id) return toast('Selecciona un empleado.', 'error');
+  try {
+    await api(`/empleados/${id}/jefe`, { method: 'PUT', body: { jefe_directo_id: document.getElementById('selJefe').value || null } });
+    toast('Organigrama actualizado.');
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+cargar();
+</script>
+</body>
+</html>

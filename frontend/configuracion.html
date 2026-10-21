@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Configuración — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Configuración</h1></div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head"><h2>Tema visual</h2></div>
+      <div class="panel-body"><div class="tema-grid" id="temas"></div></div>
+    </div>
+
+    <div class="config-grid" style="margin-bottom:20px;">
+      <div class="panel">
+        <div class="panel-head"><h2>Checador</h2></div>
+        <form id="formGeneral" class="panel-body">
+          <div class="field"><label>Nombre de la empresa</label><input type="text" name="empresa_nombre"></div>
+          <div class="field"><label>Segundos que dura cada QR en pantalla</label><input type="number" name="qr_vigencia_segundos" min="10" max="300"></div>
+          <div class="checkbox-row"><input type="checkbox" name="requiere_facial" id="reqFacial"><label for="reqFacial">Pedir verificación facial (parpadeo + comparar con la foto del empleado)</label></div>
+          <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">Solo aplica a empleados que tengan foto cargada. Se guarda una foto de cada checada.</p>
+          <button type="submit" class="btn-primary inline">Guardar</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Cambiar mi contraseña</h2></div>
+        <form id="formPass" class="panel-body">
+          <div class="field"><label>Contraseña actual</label><input type="password" name="actual" required autocomplete="current-password"></div>
+          <div class="field"><label>Nueva contraseña</label><input type="password" name="nueva" required minlength="6" autocomplete="new-password"></div>
+          <div class="field"><label>Confirmar nueva contraseña</label><input type="password" name="confirmar" required autocomplete="new-password"></div>
+          <button type="submit" class="btn-primary inline">Cambiar contraseña</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="config-grid" style="margin-bottom:20px;">
+      <div class="panel">
+        <div class="panel-head"><h2>Usuarios del panel</h2></div>
+        <div id="usuarios" class="tabla-scroll"></div>
+        <form id="formUsuario" class="panel-body" style="border-top:1px solid var(--line);">
+          <div class="form-grid">
+            <div class="field"><label>Nombre</label><input type="text" name="nombre" required></div>
+            <div class="field"><label>Usuario</label><input type="text" name="usuario" required autocomplete="off"></div>
+            <div class="field"><label>Contraseña</label><input type="password" name="password" required minlength="6" autocomplete="new-password"></div>
+            <div class="field"><label>Rol</label><select name="rol" id="selRol"><option value="admin">Administrador (RH)</option><option value="supervisor">Supervisor</option></select></div>
+            <div class="field full" id="campoEmpSup" style="display:none;"><label>Es el empleado... (para saber de quién es jefe)</label><select name="empleado_id" id="selEmpSup"></select></div>
+          </div>
+          <button type="submit" class="btn-primary inline">+ Crear usuario</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Correo para alertas</h2></div>
+        <form id="formSmtp" class="panel-body">
+          <div class="field"><label>Proveedor</label>
+            <select name="proveedor" id="selProv"><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="otro">Otro (mi dominio)</option></select>
+          </div>
+          <div class="form-grid">
+            <div class="field"><label>Servidor SMTP</label><input type="text" name="host"></div>
+            <div class="field"><label>Puerto</label><input type="number" name="puerto"></div>
+          </div>
+          <div class="field"><label>Usuario (correo)</label><input type="email" name="usuario"></div>
+          <div class="field"><label>Contraseña de aplicación <span id="lblPassSmtp" style="text-transform:none;letter-spacing:0;"></span></label><input type="password" name="contrasena" autocomplete="new-password"></div>
+          <div class="form-grid">
+            <div class="field"><label>Correo remitente</label><input type="email" name="correo_remitente" placeholder="Igual al usuario"></div>
+            <div class="field"><label>Nombre remitente</label><input type="text" name="nombre_remitente" placeholder="Compoint"></div>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin:0 0 16px;">En Gmail usa una "contraseña de aplicación" (Cuenta de Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones).</p>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary inline">Guardar</button>
+          </div>
+        </form>
+        <form id="formPrueba" class="panel-body" style="border-top:1px solid var(--line);">
+          <div class="form-grid cols-org" style="grid-template-columns:1fr auto;">
+            <div class="field"><label>Mandar correo de prueba a</label><input type="email" name="correo" required></div>
+            <div class="field"><button type="submit" class="btn-secondary">Probar</button></div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <a href="reinicio.html" class="zona-peligro-link">Zona de peligro: reinicio del sistema<span>Borrar historial, borrar todo o dejar el sistema como recién instalado.</span></a>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+const yo = iniciarPanel({ soloAdmin: true });
+const TEMAS = {
+  'oscuro-neon': ['Oscuro Neón', ['#0a0c0a', '#121512', '#5df76a']],
+  'oscuro-azul': ['Oscuro Azul', ['#0a0e14', '#111925', '#4ea8f7']],
+  'claro-corporativo': ['Claro Corporativo', ['#f2f4f3', '#ffffff', '#2f6b4f']],
+  'claro-moderno': ['Claro Moderno', ['#f7f8fa', '#ffffff', '#0d9488']]
+};
+const PROV = { gmail: ['smtp.gmail.com', 587], outlook: ['smtp-mail.outlook.com', 587] };
+let conf = null;
+
+async function cargar() {
+  try {
+    conf = await api('/configuracion');
+    const g = conf.general;
+    pintarTemas(g.tema);
+    const fg = document.getElementById('formGeneral').elements;
+    fg.empresa_nombre.value = g.empresa_nombre; fg.qr_vigencia_segundos.value = g.qr_vigencia_segundos; fg.requiere_facial.checked = g.requiere_facial;
+    const fs = document.getElementById('formSmtp').elements, s = conf.smtp;
+    ['proveedor', 'host', 'puerto', 'usuario', 'correo_remitente', 'nombre_remitente'].forEach((k) => { fs[k].value = s[k] || ''; });
+    document.getElementById('lblPassSmtp').textContent = s.tiene_contrasena ? '(ya guardada — déjala vacía para no cambiarla)' : '';
+    document.getElementById('selEmpSup').innerHTML = '<option value="">— Selecciona —</option>' + conf.empleados.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+    document.getElementById('usuarios').innerHTML = `<table class="checadas"><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${conf.usuarios.map((u) => `<tr>
+        <td>${esc(u.nombre)}${u.empleado_nombre ? `<span class="sub-celda" style="margin-left:0">Empleado: ${esc(u.empleado_nombre)}</span>` : ''}</td>
+        <td class="hora">${esc(u.usuario)}</td>
+        <td>${u.rol === 'admin' ? 'Administrador' : 'Supervisor'}</td>
+        <td>${u.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
+        <td style="white-space:nowrap;">${u.id === yo.id ? '<span style="font-size:12px;color:var(--muted)">(tú)</span>' :
+          `<button class="accion-link" onclick="alternarUsuario(${u.id})">${u.activo ? 'Desactivar' : 'Activar'}</button><button class="accion-link" onclick="restablecer(${u.id}, '${esc(u.usuario)}')">Nueva contraseña</button>`}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function pintarTemas(actual) {
+  document.getElementById('temas').innerHTML = Object.entries(TEMAS).map(([k, [nombre, cols]]) => `
+    <label class="tema-card ${k === actual ? 'tema-card-activo' : ''}" onclick="elegirTema('${k}')">
+      <div class="tema-muestra">${cols.map((c) => `<span style="background:${c}"></span>`).join('')}</div>
+      <div class="tema-nombre">${nombre}</div>
+      ${k === actual ? '<div style="font-size:11px;color:var(--neon);font-weight:600;margin-top:4px;">✓ En uso</div>' : ''}
+    </label>`).join('');
+}
+async function elegirTema(tema) {
+  try {
+    const g = conf.general;
+    await api('/configuracion/general', { method: 'PUT', body: { ...g, tema } });
+    conf.general.tema = tema;
+    localStorage.setItem('cc_tema', tema);
+    aplicarTema(tema);
+    pintarTemas(tema);
+    toast('Tema aplicado para todos los usuarios.');
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function alternarUsuario(id) {
+  try { await api(`/configuracion/usuarios/${id}/toggle`, { method: 'PATCH' }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+async function restablecer(id, usuario) {
+  const p = prompt(`Nueva contraseña para "${usuario}" (mínimo 6 caracteres):`);
+  if (!p) return;
+  try { await api(`/configuracion/usuarios/${id}/password`, { method: 'POST', body: { password: p } }); toast('Contraseña restablecida.'); } catch (e) { toast(e.message, 'error'); }
+}
+
+document.getElementById('formGeneral').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  try {
+    await api('/configuracion/general', { method: 'PUT', body: { ...conf.general, empresa_nombre: f.empresa_nombre.value, qr_vigencia_segundos: f.qr_vigencia_segundos.value, requiere_facial: f.requiere_facial.checked } });
+    toast('Configuración guardada.'); cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('formPass').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  try {
+    await api('/auth/cambiar-password', { method: 'POST', body: { actual: f.actual.value, nueva: f.nueva.value, confirmar: f.confirmar.value } });
+    ev.target.reset(); toast('Contraseña actualizada.');
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('selRol').onchange = (e) => { document.getElementById('campoEmpSup').style.display = e.target.value === 'supervisor' ? 'block' : 'none'; };
+document.getElementById('formUsuario').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  try {
+    await api('/configuracion/usuarios', { method: 'POST', body: { nombre: f.nombre.value, usuario: f.usuario.value, password: f.password.value, rol: f.rol.value, empleado_id: f.empleado_id.value || null } });
+    ev.target.reset(); document.getElementById('campoEmpSup').style.display = 'none';
+    toast('Usuario creado.'); cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('selProv').onchange = (e) => {
+  const p = PROV[e.target.value];
+  if (p) { const f = document.getElementById('formSmtp').elements; f.host.value = p[0]; f.puerto.value = p[1]; }
+};
+document.getElementById('formSmtp').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  try {
+    await api('/configuracion/smtp', { method: 'PUT', body: { proveedor: f.proveedor.value, host: f.host.value, puerto: f.puerto.value, usuario: f.usuario.value, contrasena: f.contrasena.value, correo_remitente: f.correo_remitente.value, nombre_remitente: f.nombre_remitente.value } });
+    f.contrasena.value = ''; toast('Correo guardado.'); cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('formPrueba').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try { await api('/configuracion/smtp/probar', { method: 'POST', body: { correo: ev.target.elements.correo.value } }); toast('Correo de prueba enviado. Revisa tu bandeja.'); }
+  catch (e) { toast(e.message, 'error'); }
+});
+cargar();
+</script>
+</body>
+</html>

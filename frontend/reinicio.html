@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Reinicio del sistema — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Reinicio del sistema</h1></div>
+    <div class="peligro-banner"><b>Cuidado:</b> estas acciones borran información y no se pueden deshacer. Descarga un respaldo antes.</div>
+    <div class="respaldo-cta">
+      <div><div style="font-weight:700;">¿Ya descargaste tu respaldo?</div><div style="font-size:12.5px;color:var(--muted);">Hazlo antes de continuar.</div></div>
+      <a href="respaldos.html" class="btn-secondary">Ir a Respaldos</a>
+    </div>
+    <div class="conteo-actual" id="conteo"></div>
+    <div id="msg"></div>
+    <div id="niveles"></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const NIVELES = [
+  { id: 'historial', titulo: 'Borrar historial de asistencia', frase: 'BORRAR HISTORIAL', desc: 'Para empezar un nuevo periodo con los mismos empleados.', borra: 'Borra: checadas, auditoría e incidencias. Conserva: empleados, horarios, festivos, usuarios y configuración.' },
+  { id: 'operativo', titulo: 'Borrar todo (menos usuarios y configuración)', frase: 'BORRAR TODO', desc: 'Para usar el sistema en otro negocio o empezar de cero con la plantilla.', borra: 'Borra: empleados (y sus fotos), horarios, festivos y todo el historial. Conserva: usuarios y configuración.' },
+  { id: 'fabrica', titulo: 'Reinicio de fábrica', frase: 'REINICIO DE FABRICA', critico: true, desc: 'Deja el sistema como recién instalado.', borra: 'Borra todo lo anterior, todos los demás usuarios y la configuración de correo y tema. Solo se conserva TU usuario para que no te quedes fuera.' }
+];
+document.getElementById('niveles').innerHTML = NIVELES.map((n) => `
+  <div class="nivel-card ${n.critico ? 'critico' : ''}">
+    <div class="nivel-titulo ${n.critico ? 'rojo' : ''}">${n.titulo}</div>
+    <div class="nivel-desc">${n.desc}</div>
+    <div class="nivel-borra">${n.borra}</div>
+    <div class="form-grid cols-org" style="grid-template-columns:1fr auto;">
+      <div class="field"><label>Escribe <b style="color:var(--white)">${n.frase}</b> para confirmar</label><input type="text" class="frase-input" id="f_${n.id}" autocomplete="off"></div>
+      <div class="field"><button class="btn-peligro" id="b_${n.id}" disabled>Ejecutar</button></div>
+    </div>
+  </div>`).join('');
+NIVELES.forEach((n) => {
+  const inp = document.getElementById('f_' + n.id), btn = document.getElementById('b_' + n.id);
+  inp.oninput = () => { btn.disabled = inp.value.trim().toUpperCase() !== n.frase; };
+  btn.onclick = async () => {
+    if (!confirm(`Última confirmación: ${n.titulo}. ¿Continuar?`)) return;
+    try {
+      const r = await api('/reinicio', { method: 'POST', body: { nivel: n.id, frase: inp.value } });
+      document.getElementById('msg').innerHTML = `<div class="msg-ok">${esc(r.mensaje)}</div>`;
+      inp.value = ''; btn.disabled = true;
+      contar();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) { toast(e.message, 'error'); }
+  };
+});
+function contar() {
+  api('/conteos').then((c) => {
+    document.getElementById('conteo').innerHTML = `Actualmente: <b>${c.empleados}</b> empleados · <b>${c.checadas}</b> checadas · <b>${c.horarios}</b> horarios · <b>${c.incidencias}</b> incidencias · <b>${c.usuarios}</b> usuarios`;
+  }).catch(() => {});
+}
+contar();
+</script>
+</body>
+</html>

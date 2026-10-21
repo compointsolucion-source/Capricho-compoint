@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Portal del empleado — Capricho-compoint</title>
+</head>
+<body>
+<div class="portal-wrap">
+  <div class="portal-header">
+    <div class="logo-chip"><img src="img/logo.png" alt="Compoint"></div>
+    <button class="salir paso-oculto" id="btnSalir">Cerrar sesión</button>
+  </div>
+
+  <!-- Acceso -->
+  <div id="vistaLogin" class="paso-oculto">
+    <div class="panel">
+      <div class="panel-head"><h2>Acceso al portal del empleado</h2></div>
+      <form id="formLogin" class="panel-body">
+        <p style="color:var(--muted);font-size:13px;margin:0 0 18px;">Consulta tus vacaciones, tus checadas y solicita permisos. Entra con tu número de empleado y el mismo PIN con el que checas.</p>
+        <div class="field"><label>Número de empleado</label><input type="text" name="numero_empleado" required autocomplete="username"></div>
+        <div class="field"><label>PIN</label><input type="password" name="pin" maxlength="4" inputmode="numeric" required autocomplete="current-password"></div>
+        <div id="errLogin"></div>
+        <button type="submit" class="btn-primary">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Portal -->
+  <div id="vistaPortal" class="paso-oculto">
+    <h1 style="font-size:22px;text-transform:uppercase;letter-spacing:.02em;margin:0 0 4px;">Hola, <span id="nombre" style="color:var(--neon)"></span></h1>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 22px;" id="datos"></p>
+    <div class="vacas-card">
+      <div><div class="num" id="vDisp">—</div><div class="lbl">Días de vacaciones disponibles este año</div></div>
+      <div style="text-align:right;font-size:12.5px;color:var(--muted);" id="vDet"></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head"><h2>Nueva solicitud</h2></div>
+      <form id="formSol" class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>Tipo</label>
+            <select name="tipo" id="tipoSolicitud"><option value="vacaciones">Vacaciones</option><option value="permiso">Permiso</option><option value="incapacidad">Incapacidad</option><option value="horas_extra">Horas extra</option></select>
+          </div>
+          <div class="field"><label>Fecha</label><input type="date" name="fecha" required></div>
+          <div class="field" id="campoFechaFin"><label>Hasta</label><input type="date" name="fecha_fin"></div>
+          <div class="field" id="campoHoras"><label>Horas</label><input type="number" name="horas" step="0.5" min="0.5"></div>
+          <div class="field full"><label>Comentario</label><input type="text" name="comentario" maxlength="255"></div>
+          <div class="field full"><label>Justificante (opcional: PDF, JPG o PNG)</label><input type="file" id="archivo" accept="application/pdf,image/jpeg,image/png"></div>
+        </div>
+        <button type="submit" class="btn-primary inline">Enviar solicitud</button>
+      </form>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head"><h2>Mis solicitudes</h2></div>
+      <div id="solicitudes" class="tabla-scroll"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Mis últimas checadas</h2></div>
+      <div id="checadas" class="tabla-scroll"></div>
+    </div>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+const ETQ = { vacaciones: 'Vacaciones', permiso: 'Permiso', incapacidad: 'Incapacidad', horas_extra: 'Horas extra', falta: 'Falta', otro: 'Otro' };
+const EST = { pendiente: 'Pendiente', aprobado: 'Aprobado', rechazado: 'Rechazado' };
+const papi = (ruta, op = {}) => api(ruta, { ...op, tokenKey: 'cc_token_empleado' });
+
+function ajustarCampos() {
+  const t = document.getElementById('tipoSolicitud').value;
+  document.getElementById('campoHoras').style.display = t === 'horas_extra' ? 'block' : 'none';
+  document.getElementById('campoFechaFin').style.display = t !== 'horas_extra' ? 'block' : 'none';
+}
+document.getElementById('tipoSolicitud').onchange = ajustarCampos;
+
+function vista(logueado) {
+  document.getElementById('vistaLogin').classList.toggle('paso-oculto', logueado);
+  document.getElementById('vistaPortal').classList.toggle('paso-oculto', !logueado);
+  document.getElementById('btnSalir').classList.toggle('paso-oculto', !logueado);
+}
+
+async function cargar() {
+  try {
+    const d = await papi('/portal/yo');
+    vista(true);
+    const e = d.empleado;
+    document.getElementById('nombre').textContent = e.nombre.split(' ')[0];
+    document.getElementById('datos').textContent = [e.puesto, e.departamento, e.horario_nombre ? `Turno: ${e.horario_nombre}${e.hora_entrada ? ` (${hhmm(e.hora_entrada)}–${hhmm(e.hora_salida)})` : ''}` : null].filter(Boolean).join(' · ');
+    document.getElementById('vDisp').textContent = Math.max(d.vacaciones.dias - d.dias_usados, 0);
+    document.getElementById('vDet').innerHTML = `Antigüedad: <b>${d.vacaciones.anios}</b> año(s)<br>Te corresponden: <b>${d.vacaciones.dias}</b> días (LFT)<br>Usados este año: <b>${d.dias_usados}</b>`;
+    document.getElementById('solicitudes').innerHTML = d.solicitudes.length ? `<table class="checadas"><thead><tr><th>Tipo</th><th>Fechas</th><th>Estado</th></tr></thead><tbody>
+      ${d.solicitudes.map((s) => `<tr><td>${ETQ[s.tipo]}${s.horas ? ` · ${s.horas} h` : ''}</td><td class="hora">${fechaCorta(s.fecha)}${s.fecha_fin ? ' → ' + fechaCorta(s.fecha_fin) : ''}</td><td><span class="estado-pill estado-${s.estado}">${EST[s.estado]}</span></td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty-state">Aún no has hecho solicitudes.</div>';
+    document.getElementById('checadas').innerHTML = d.checadas.length ? `<table class="checadas"><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th></tr></thead><tbody>
+      ${d.checadas.map((c) => `<tr><td class="hora">${fechaCorta(c.fecha)}</td><td class="hora">${hhmmss(c.hora)}</td><td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty-state">Sin checadas registradas.</div>';
+  } catch (e) {
+    localStorage.removeItem('cc_token_empleado');
+    vista(false);
+  }
+}
+
+document.getElementById('formLogin').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  document.getElementById('errLogin').innerHTML = '';
+  try {
+    const r = await api('/portal/login', { method: 'POST', sinRedirigir: true, tokenKey: 'nada', body: { numero_empleado: f.numero_empleado.value.trim(), pin: f.pin.value.trim() } });
+    localStorage.setItem('cc_token_empleado', r.token);
+    ev.target.reset();
+    cargar();
+  } catch (e) { document.getElementById('errLogin').innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
+});
+document.getElementById('formSol').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  try {
+    await papi('/portal/solicitudes', { method: 'POST', body: {
+      tipo: f.tipo.value, fecha: f.fecha.value, fecha_fin: f.fecha_fin.value || null, horas: f.horas.value, comentario: f.comentario.value,
+      archivo: await leerArchivo(document.getElementById('archivo'), { maxLado: 1600 })
+    }});
+    ev.target.reset(); ajustarCampos();
+    toast('Solicitud enviada. RH o tu jefe la revisarán.');
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('btnSalir').onclick = () => { localStorage.removeItem('cc_token_empleado'); vista(false); };
+ajustarCampos();
+if (localStorage.getItem('cc_token_empleado')) cargar(); else vista(false);
+</script>
+</body>
+</html>

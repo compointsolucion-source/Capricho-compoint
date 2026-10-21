@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Checadas — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Checadas</h1></div>
+    <div class="panel form-panel">
+      <div class="panel-head"><h2 id="tituloForm">Agregar checada manual</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid cols-4">
+          <div class="field" id="campoEmpleado"><label>Empleado</label><select name="empleado_id" id="selEmp"></select></div>
+          <div class="field"><label>Fecha</label><input type="date" name="fecha" required></div>
+          <div class="field"><label>Hora</label><input type="time" name="hora" step="1" required></div>
+          <div class="field"><label>Tipo</label><select name="tipo"><option value="entrada">Entrada</option><option value="salida">Salida</option></select></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary inline">Guardar</button>
+          <button type="button" class="btn-secondary paso-oculto" id="btnCancelar">Cancelar edición</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:12px 0 0;">Todo lo que agregues, edites o elimines aquí queda registrado en Auditoría.</p>
+      </form>
+    </div>
+    <div class="selector-fecha">
+      <label style="font-size:12px;text-transform:uppercase;color:var(--muted);font-weight:600;">Ver día</label>
+      <input type="date" id="fechaVer">
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2 id="tituloTabla">Checadas</h2></div>
+      <div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const form = document.getElementById('form');
+const fechaVer = document.getElementById('fechaVer');
+fechaVer.value = hoyMx();
+form.elements.fecha.value = hoyMx();
+let checadas = [], editandoId = null;
+
+api('/empleados').then((es) => {
+  document.getElementById('selEmp').innerHTML = '<option value="">— Selecciona —</option>' +
+    es.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+}).catch(() => {});
+
+async function cargar() {
+  try {
+    const d = await api(`/checadas?fecha=${fechaVer.value}`);
+    checadas = d.checadas;
+    document.getElementById('tituloTabla').textContent = `Checadas del ${fechaCorta(d.fecha)}`;
+    const t = document.getElementById('tabla');
+    if (!checadas.length) { t.innerHTML = '<div class="empty-state">No hay checadas ese día.</div>'; return; }
+    t.innerHTML = `<table class="checadas"><thead><tr><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Método</th><th>Foto</th><th>Acciones</th></tr></thead><tbody>
+      ${checadas.map((c) => `<tr>
+        <td class="hora">${hhmmss(c.hora)}</td>
+        <td>${esc(c.nombre)}</td>
+        <td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
+        <td class="${c.metodo === 'manual' ? 'metodo-manual' : ''}" style="text-transform:capitalize;font-size:12.5px;">${esc(c.metodo)}${c.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
+        <td>${c.foto_url ? `<a href="${esc(urlArchivo(c.foto_url))}" target="_blank"><img class="avatar-thumb" src="${esc(urlArchivo(c.foto_url))}" alt=""></a>` : '—'}</td>
+        <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${c.id})">Editar</button>
+          <button class="accion-link rojo" onclick="eliminar(${c.id})">Eliminar</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function editar(id) {
+  const c = checadas.find((x) => x.id === id);
+  editandoId = id;
+  document.getElementById('tituloForm').textContent = `Editar checada de ${c.nombre}`;
+  document.getElementById('campoEmpleado').classList.add('paso-oculto');
+  document.getElementById('btnCancelar').classList.remove('paso-oculto');
+  form.elements.fecha.value = c.fecha;
+  form.elements.hora.value = hhmmss(c.hora);
+  form.elements.tipo.value = c.tipo;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function cancelar() {
+  editandoId = null;
+  form.reset();
+  form.elements.fecha.value = fechaVer.value;
+  document.getElementById('tituloForm').textContent = 'Agregar checada manual';
+  document.getElementById('campoEmpleado').classList.remove('paso-oculto');
+  document.getElementById('btnCancelar').classList.add('paso-oculto');
+}
+async function eliminar(id) {
+  if (!confirm('¿Eliminar esta checada? Quedará registrado en auditoría.')) return;
+  try { await api(`/checadas/${id}`, { method: 'DELETE' }); toast('Checada eliminada.'); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = form.elements;
+  const body = { empleado_id: f.empleado_id.value, fecha: f.fecha.value, hora: f.hora.value, tipo: f.tipo.value };
+  try {
+    if (editandoId) await api(`/checadas/${editandoId}`, { method: 'PUT', body });
+    else await api('/checadas', { method: 'POST', body });
+    toast('Guardado. Este cambio quedó registrado en Auditoría.');
+    fechaVer.value = f.fecha.value;
+    cancelar();
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('btnCancelar').onclick = cancelar;
+fechaVer.onchange = cargar;
+cargar();
+</script>
+</body>
+</html>

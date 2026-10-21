@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Incidencias — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <h1>Incidencias</h1>
+      <button class="btn-primary inline" id="btnNueva">+ Nueva solicitud</button>
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="kpi-card accent-amber"><div class="label">Pendientes</div><div class="value" id="kPend">—</div></div>
+      <div class="kpi-card accent-forest"><div class="label">Aprobadas este mes</div><div class="value" id="kAprob">—</div></div>
+      <div class="kpi-card"><div class="label">Total histórico</div><div class="value" id="kTotal">—</div></div>
+    </div>
+
+    <div class="panel form-panel paso-oculto" id="panelForm">
+      <div class="panel-head"><h2>Nueva solicitud</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>Empleado</label><select name="empleado_id" id="selEmp" required></select></div>
+          <div class="field"><label>Tipo</label>
+            <select name="tipo" id="tipoSolicitud">
+              <option value="vacaciones">Vacaciones</option><option value="permiso">Permiso</option>
+              <option value="incapacidad">Incapacidad</option><option value="horas_extra">Horas extra</option>
+              <option value="falta">Falta</option><option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="field"><label>Fecha</label><input type="date" name="fecha" required></div>
+          <div class="field" id="campoFechaFin"><label>Hasta (fecha final)</label><input type="date" name="fecha_fin"></div>
+          <div class="field" id="campoHoras"><label>Horas</label><input type="number" name="horas" step="0.5" min="0.5"></div>
+          <div class="field"><label>Estado</label>
+            <select name="estado"><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select>
+          </div>
+          <div class="field full"><label>Comentario</label><input type="text" name="comentario" maxlength="255"></div>
+          <div class="field full"><label>Justificante (PDF, JPG o PNG)</label><input type="file" id="archivo" accept="application/pdf,image/jpeg,image/png"></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary inline">Guardar</button>
+          <button type="button" class="btn-secondary" id="btnCancelar">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-e="pendiente">Pendientes</button>
+      <button class="tab" data-e="aprobado">Aprobadas</button>
+      <button class="tab" data-e="rechazado">Rechazadas</button>
+      <button class="tab" data-e="todos">Todas</button>
+    </div>
+    <div class="panel"><div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel();
+const ETQ = { vacaciones: 'Vacaciones', permiso: 'Permiso', incapacidad: 'Incapacidad', horas_extra: 'Horas extra', falta: 'Falta', otro: 'Otro' };
+const EST = { pendiente: 'Pendiente', aprobado: 'Aprobado', rechazado: 'Rechazado' };
+const form = document.getElementById('form');
+let estado = 'pendiente';
+
+function ajustarCampos() {
+  const t = document.getElementById('tipoSolicitud').value;
+  document.getElementById('campoHoras').style.display = t === 'horas_extra' ? 'block' : 'none';
+  document.getElementById('campoFechaFin').style.display = (t === 'vacaciones' || t === 'incapacidad' || t === 'permiso') ? 'block' : 'none';
+}
+document.getElementById('tipoSolicitud').onchange = ajustarCampos;
+ajustarCampos();
+
+api('/empleados').then((es) => {
+  document.getElementById('selEmp').innerHTML = '<option value="">— Selecciona —</option>' +
+    es.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+}).catch(() => {});
+
+async function cargar() {
+  try {
+    const d = await api(`/incidencias?estado=${estado}`);
+    document.getElementById('kPend').textContent = d.kpis.pendientes;
+    document.getElementById('kAprob').textContent = d.kpis.aprobadas_mes;
+    document.getElementById('kTotal').textContent = d.kpis.total;
+    const t = document.getElementById('tabla');
+    if (!d.solicitudes.length) { t.innerHTML = '<div class="empty-state">No hay solicitudes en esta vista.</div>'; return; }
+    t.innerHTML = `<table class="checadas"><thead><tr><th>Empleado</th><th>Tipo</th><th>Fechas</th><th>Detalle</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+      ${d.solicitudes.map((s) => `<tr>
+        <td>${esc(s.empleado_nombre)}</td>
+        <td>${ETQ[s.tipo]}${s.horas ? ` · ${s.horas} h` : ''}</td>
+        <td class="hora">${fechaCorta(s.fecha)}${s.fecha_fin ? ' → ' + fechaCorta(s.fecha_fin) : ''}</td>
+        <td style="font-size:12.5px;">${esc(s.comentario || '—')}${s.archivo_url ? `<br><a class="ver-archivo" href="${esc(urlArchivo(s.archivo_url))}" target="_blank">📎 Ver justificante</a>` : ''}</td>
+        <td><span class="estado-pill estado-${s.estado}">${EST[s.estado]}</span>${s.revisor_nombre ? `<span class="sub-celda" style="margin-left:0">por ${esc(s.revisor_nombre)}</span>` : ''}</td>
+        <td style="white-space:nowrap;">${s.estado === 'pendiente'
+          ? `<button class="accion-link aprobar" onclick="resolver(${s.id},'aprobado')">Aprobar</button><button class="accion-link rechazar" onclick="resolver(${s.id},'rechazado')">Rechazar</button>` : '—'}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function resolver(id, accion) {
+  try { await api(`/incidencias/${id}/resolver`, { method: 'PATCH', body: { accion } }); toast(accion === 'aprobado' ? 'Solicitud aprobada.' : 'Solicitud rechazada.'); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+document.querySelectorAll('.tab').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+  b.classList.add('active'); estado = b.dataset.e; cargar();
+});
+document.getElementById('btnNueva').onclick = () => { document.getElementById('panelForm').classList.remove('paso-oculto'); form.elements.fecha.value = hoyMx(); };
+document.getElementById('btnCancelar').onclick = () => { form.reset(); ajustarCampos(); document.getElementById('panelForm').classList.add('paso-oculto'); };
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = form.elements;
+  try {
+    await api('/incidencias', { method: 'POST', body: {
+      empleado_id: f.empleado_id.value, tipo: f.tipo.value, fecha: f.fecha.value, fecha_fin: f.fecha_fin.value || null,
+      horas: f.horas.value, estado: f.estado.value, comentario: f.comentario.value,
+      archivo: await leerArchivo(document.getElementById('archivo'), { maxLado: 1600 })
+    }});
+    toast('Solicitud guardada.');
+    form.reset(); ajustarCampos();
+    document.getElementById('panelForm').classList.add('paso-oculto');
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+cargar();
+</script>
+</body>
+</html>

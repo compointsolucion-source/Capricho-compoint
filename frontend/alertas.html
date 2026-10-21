@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Alertas — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Alertas</h1></div>
+    <div class="disclaimer">Estas alertas se revisan al abrir esta página. Para mandarlas por correo, configura tus datos en Configuración → Correo para alertas.</div>
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head"><h2 id="tAus">Empleados que no han llegado hoy</h2><button class="btn-mini" id="btnAvisar">Enviar esta lista por correo</button></div>
+      <div id="ausentes"><div class="cargando">Cargando...</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head"><h2 id="tExtra">Horas extra pendientes de autorizar</h2></div>
+      <div id="extra"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Enviar correo manual</h2></div>
+      <form id="form" class="panel-body">
+        <div class="field"><label>Para</label><input type="email" name="destinatario" required placeholder="correo@ejemplo.com"></div>
+        <div class="field"><label>Asunto</label><input type="text" name="asunto" required value="Alerta de asistencia — Compoint"></div>
+        <div class="field"><label>Mensaje</label><textarea name="cuerpo" required></textarea></div>
+        <button type="submit" class="btn-primary inline" id="btnEnviar">Enviar</button>
+      </form>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const form = document.getElementById('form');
+let ausentes = [];
+api('/dashboard/alertas').then((d) => {
+  ausentes = d.ausentes;
+  document.getElementById('tAus').textContent = `Empleados que no han llegado hoy (${d.ausentes.length})`;
+  document.getElementById('ausentes').innerHTML = d.festivo ? `<div class="empty-state">Hoy es día festivo (${esc(d.festivo)}), no se esperan checadas.</div>`
+    : !d.ausentes.length ? '<div class="empty-state">Todos los que debían checar hoy ya lo hicieron (o aún no vence su tolerancia). Buena señal.</div>'
+    : d.ausentes.map((a) => `<div class="alerta-fila"><div><div class="alerta-nombre">${esc(a.nombre)}</div><div class="alerta-detalle">${esc(a.departamento || 'Sin departamento')} · debía entrar a las ${hhmm(a.hora_entrada)}</div></div></div>`).join('');
+  document.getElementById('tExtra').textContent = `Horas extra pendientes de autorizar (${d.horas_extra.length})`;
+  document.getElementById('extra').innerHTML = !d.horas_extra.length ? '<div class="empty-state">No hay solicitudes de horas extra sin revisar.</div>'
+    : d.horas_extra.map((h) => `<div class="alerta-fila"><div><div class="alerta-nombre">${esc(h.empleado_nombre)}</div><div class="alerta-detalle">${fechaCorta(h.fecha)} · ${h.horas || '?'} horas</div></div><a href="incidencias.html" class="btn-mini">Revisar en Incidencias</a></div>`).join('');
+}).catch((e) => toast(e.message, 'error'));
+
+document.getElementById('btnAvisar').onclick = () => {
+  form.elements.asunto.value = `Faltan por llegar hoy (${ausentes.length}) — Compoint`;
+  form.elements.cuerpo.value = ausentes.length
+    ? 'Empleados que no han checado entrada hoy:\n\n' + ausentes.map((a) => `- ${a.nombre} (${a.departamento || 'Sin departamento'}), debía entrar a las ${hhmm(a.hora_entrada)}`).join('\n')
+    : 'Hoy todos llegaron a tiempo.';
+  form.elements.destinatario.focus();
+};
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const b = document.getElementById('btnEnviar');
+  b.disabled = true;
+  try {
+    await api('/dashboard/alertas/correo', { method: 'POST', body: { destinatario: form.elements.destinatario.value, asunto: form.elements.asunto.value, cuerpo: form.elements.cuerpo.value } });
+    toast(`Correo enviado a ${form.elements.destinatario.value}.`);
+  } catch (e) { toast(e.message, 'error'); }
+  b.disabled = false;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Pre-nómina — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Pre-nómina</h1></div>
+    <div class="disclaimer">
+      Cálculo de apoyo según la Ley Federal del Trabajo: horas extra dobles (primeras 9 por semana) y triples (después de 9), horas en domingo para prima dominical, retardos y faltas.
+      Los días con vacaciones, permiso o incapacidad <b>aprobados</b> no cuentan como falta. Revísalo antes de capturarlo en tu sistema de nómina (ASPEL NOI, CONTPAQi, etc.).
+    </div>
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="filtros">
+        <div class="field"><label>Desde</label><input type="date" id="desde"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="hasta"></div>
+        <div class="field"><label>Empleado</label><select id="selEmp"><option value="">Todos</option></select></div>
+        <button class="btn-primary inline" id="btnVer">Calcular</button>
+        <button class="btn-secondary" id="btnCsv">Exportar a Excel (CSV)</button>
+      </div>
+      <div class="atajos-fecha" style="padding:0 20px 6px;">
+        <button class="atajo-btn" data-r="semana">Esta semana</button>
+        <button class="atajo-btn" data-r="semant">Semana anterior</button>
+        <button class="atajo-btn" data-r="q1">1ª quincena</button>
+        <button class="atajo-btn" data-r="q2">2ª quincena</button>
+        <button class="atajo-btn" data-r="mes">Este mes</button>
+      </div>
+    </div>
+    <div id="avisoSinHorario"></div>
+    <div class="panel">
+      <div class="panel-head"><h2 id="titulo">Resumen del periodo</h2></div>
+      <div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const $ = (id) => document.getElementById(id);
+const hoy = hoyMx();
+const lunes = (f) => sumarDiasStr(f, -((new Date(f + 'T12:00:00').getDay() + 6) % 7));
+$('desde').value = lunes(hoy);
+$('hasta').value = sumarDiasStr(lunes(hoy), 6);
+let datos = null;
+
+api('/empleados').then((es) => {
+  $('selEmp').innerHTML = '<option value="">Todos</option>' + es.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+}).catch(() => {});
+
+async function cargar() {
+  try {
+    const q = new URLSearchParams({ desde: $('desde').value, hasta: $('hasta').value });
+    if ($('selEmp').value) q.set('empleado_id', $('selEmp').value);
+    datos = await api('/reportes/prenomina?' + q);
+    $('titulo').textContent = `Resumen del ${fechaCorta(datos.desde)} al ${fechaCorta(datos.hasta)}`;
+    $('avisoSinHorario').innerHTML = datos.sin_horario ? `<div class="disclaimer">${datos.sin_horario} empleado(s) activo(s) no tienen horario asignado y no aparecen aquí. Asígnales uno en <a href="empleados.html" style="text-decoration:underline">Empleados</a>.</div>` : '';
+    const r = datos.resultados;
+    $('tabla').innerHTML = r.length ? `<table class="checadas"><thead><tr><th>Empleado</th><th>Turno</th><th>Días trab.</th><th>Hrs ordinarias</th><th>Extra dobles</th><th>Extra triples</th><th>Hrs domingo</th><th>Retardos</th><th>Faltas</th><th>Justificados</th></tr></thead><tbody>
+      ${r.map((x) => `<tr>
+        <td>${esc(x.nombre)}</td><td>${esc(x.turno)}</td>
+        <td class="num-cell">${x.dias_trabajados}</td>
+        <td class="num-cell">${x.horas_ordinarias}</td>
+        <td class="num-cell">${x.horas_dobles}</td>
+        <td class="num-cell" style="color:${x.horas_triples ? 'var(--amber)' : 'inherit'}">${x.horas_triples}</td>
+        <td class="num-cell">${x.horas_domingo}</td>
+        <td class="num-cell" style="color:${x.retardos ? 'var(--amber)' : 'inherit'}">${x.retardos}</td>
+        <td class="num-cell" style="color:${x.faltas ? 'var(--red)' : 'inherit'}">${x.faltas}</td>
+        <td class="num-cell">${x.dias_justificados}</td>
+      </tr>`).join('')}</tbody></table>` : '<div class="empty-state">No hay empleados con horario asignado para calcular.</div>';
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+document.querySelectorAll('.atajo-btn').forEach((b) => b.onclick = () => {
+  const r = b.dataset.r, mes = hoy.slice(0, 8);
+  if (r === 'semana') { $('desde').value = lunes(hoy); $('hasta').value = sumarDiasStr(lunes(hoy), 6); }
+  if (r === 'semant') { const l = sumarDiasStr(lunes(hoy), -7); $('desde').value = l; $('hasta').value = sumarDiasStr(l, 6); }
+  if (r === 'q1') { $('desde').value = mes + '01'; $('hasta').value = mes + '15'; }
+  if (r === 'q2') { $('desde').value = mes + '16'; const sig = new Date(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)), 0).getDate(); $('hasta').value = mes + String(sig).padStart(2, '0'); }
+  if (r === 'mes') { $('desde').value = mes + '01'; const sig = new Date(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)), 0).getDate(); $('hasta').value = mes + String(sig).padStart(2, '0'); }
+  cargar();
+});
+$('btnVer').onclick = cargar;
+$('btnCsv').onclick = () => {
+  if (!datos) return;
+  exportarCsv(`prenomina_${datos.desde}_a_${datos.hasta}.csv`,
+    ['Empleado', 'Departamento', 'Turno', 'Días trabajados', 'Horas ordinarias', 'Horas extra dobles', 'Horas extra triples', 'Horas trabajadas en domingo (prima dominical)', 'Retardos', 'Faltas', 'Días justificados'],
+    datos.resultados.map((x) => [x.nombre, x.departamento, x.turno, x.dias_trabajados, x.horas_ordinarias, x.horas_dobles, x.horas_triples, x.horas_domingo, x.retardos, x.faltas, x.dias_justificados]));
+};
+cargar();
+</script>
+</body>
+</html>

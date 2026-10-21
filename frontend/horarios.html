@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Horarios — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <h1>Horarios</h1>
+      <button class="btn-primary inline" id="btnNuevo">+ Nuevo horario</button>
+    </div>
+
+    <div class="panel form-panel paso-oculto" id="panelForm">
+      <div class="panel-head"><h2 id="tituloForm">Nuevo horario</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>Nombre del turno</label><input type="text" name="nombre" required placeholder="Ej. Turno matutino"></div>
+          <div class="field"><label>Tipo de turno</label>
+            <select name="tipo_turno" id="tipoTurno">
+              <option value="fijo">Fijo</option>
+              <option value="nocturno">Nocturno (cruza medianoche)</option>
+              <option value="flexible">Flexible (sin hora fija)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid" id="camposHorario">
+          <div class="field"><label>Hora de entrada</label><input type="time" name="hora_entrada"></div>
+          <div class="field"><label>Hora de salida</label><input type="time" name="hora_salida"></div>
+          <div class="field"><label>Tolerancia de entrada (min)</label><input type="number" name="tolerancia_minutos" min="0" value="10"></div>
+          <div class="field"><label>Tolerancia de salida anticipada (min)</label><input type="number" name="tolerancia_salida_minutos" min="0" value="10"></div>
+          <div class="nota-turno" id="notaNocturno" style="display:none;">Turno nocturno: la salida se toma al día siguiente (ej. 22:00 a 06:00).</div>
+        </div>
+        <div class="form-grid" id="campoFlexible" style="display:none;">
+          <div class="field"><label>Horas requeridas por día</label><input type="number" name="horas_requeridas" step="0.25" min="0.5" max="24" placeholder="Ej. 8"></div>
+        </div>
+        <div class="field"><label>Días que aplica</label></div>
+        <div class="dias-grid" id="dias"></div>
+        <div class="checkbox-row"><input type="checkbox" name="activo" id="activo" checked><label for="activo">Horario activo</label></div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary inline">Guardar</button>
+          <button type="button" class="btn-secondary" id="btnCancelar">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Todos los horarios</h2></div>
+      <div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const DIAS = { L: 'Lun', M: 'Mar', X: 'Mié', J: 'Jue', V: 'Vie', S: 'Sáb', D: 'Dom' };
+const ETIQ = { fijo: 'Fijo', nocturno: 'Nocturno', flexible: 'Flexible' };
+const form = document.getElementById('form');
+const panel = document.getElementById('panelForm');
+let horarios = [], editandoId = null;
+
+document.getElementById('dias').innerHTML = Object.entries(DIAS).map(([k, v]) =>
+  `<div class="dia-chip"><input type="checkbox" id="d${k}" value="${k}"><label for="d${k}">${v}</label></div>`).join('');
+
+function actualizarCampos() {
+  const tipo = document.getElementById('tipoTurno').value;
+  document.getElementById('campoFlexible').style.display = tipo === 'flexible' ? 'grid' : 'none';
+  document.getElementById('camposHorario').style.display = tipo === 'flexible' ? 'none' : 'grid';
+  document.getElementById('notaNocturno').style.display = tipo === 'nocturno' ? 'block' : 'none';
+}
+document.getElementById('tipoTurno').onchange = actualizarCampos;
+
+async function cargar() {
+  try {
+    horarios = await api('/horarios');
+    const t = document.getElementById('tabla');
+    if (!horarios.length) { t.innerHTML = '<div class="empty-state">Aún no hay horarios. Crea el primero con "+ Nuevo horario".</div>'; return; }
+    t.innerHTML = `<table class="checadas"><thead><tr><th>Turno</th><th>Tipo</th><th>Horario</th><th>Tolerancia</th><th>Días</th><th>Empleados</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+      ${horarios.map((h) => `<tr>
+        <td>${esc(h.nombre)}</td>
+        <td><span class="tipo-pill tipo-${h.tipo_turno}">${ETIQ[h.tipo_turno]}</span></td>
+        <td class="hora">${h.tipo_turno === 'flexible' ? `${h.horas_requeridas} h/día` : `${hhmm(h.hora_entrada)} – ${hhmm(h.hora_salida)}`}</td>
+        <td class="hora">${h.tipo_turno === 'flexible' ? '—' : `${h.tolerancia_minutos} / ${h.tolerancia_salida_minutos} min`}</td>
+        <td style="font-size:12.5px;">${h.dias_semana.split(',').map((d) => DIAS[d]).join(', ')}</td>
+        <td class="num-cell">${h.empleados}</td>
+        <td>${h.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
+        <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${h.id})">Editar</button>
+          <button class="accion-link" onclick="alternar(${h.id})">${h.activo ? 'Desactivar' : 'Activar'}</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function abrirForm(h) {
+  editandoId = h ? h.id : null;
+  form.reset();
+  document.getElementById('tituloForm').textContent = h ? 'Editar horario' : 'Nuevo horario';
+  const dias = h ? h.dias_semana.split(',') : ['L', 'M', 'X', 'J', 'V'];
+  Object.keys(DIAS).forEach((k) => { document.getElementById('d' + k).checked = dias.includes(k); });
+  if (h) {
+    form.elements.nombre.value = h.nombre;
+    form.elements.tipo_turno.value = h.tipo_turno;
+    form.elements.hora_entrada.value = hhmm(h.hora_entrada) === '—' ? '' : hhmm(h.hora_entrada);
+    form.elements.hora_salida.value = hhmm(h.hora_salida) === '—' ? '' : hhmm(h.hora_salida);
+    form.elements.tolerancia_minutos.value = h.tolerancia_minutos;
+    form.elements.tolerancia_salida_minutos.value = h.tolerancia_salida_minutos;
+    form.elements.horas_requeridas.value = h.horas_requeridas || '';
+    form.elements.activo.checked = h.activo;
+  }
+  actualizarCampos();
+  panel.classList.remove('paso-oculto');
+  document.getElementById('btnNuevo').classList.add('paso-oculto');
+}
+function cerrarForm() { panel.classList.add('paso-oculto'); document.getElementById('btnNuevo').classList.remove('paso-oculto'); }
+function editar(id) { abrirForm(horarios.find((h) => h.id === id)); }
+async function alternar(id) {
+  try { await api(`/horarios/${id}/toggle`, { method: 'PATCH' }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = form.elements;
+  const body = {
+    nombre: f.nombre.value, tipo_turno: f.tipo_turno.value, hora_entrada: f.hora_entrada.value, hora_salida: f.hora_salida.value,
+    tolerancia_minutos: f.tolerancia_minutos.value, tolerancia_salida_minutos: f.tolerancia_salida_minutos.value,
+    horas_requeridas: f.horas_requeridas.value, activo: f.activo.checked,
+    dias: Object.keys(DIAS).filter((k) => document.getElementById('d' + k).checked)
+  };
+  try {
+    if (editandoId) await api(`/horarios/${editandoId}`, { method: 'PUT', body });
+    else await api('/horarios', { method: 'POST', body });
+    toast('Horario guardado.');
+    cerrarForm(); cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('btnNuevo').onclick = () => abrirForm(null);
+document.getElementById('btnCancelar').onclick = cerrarForm;
+cargar();
+</script>
+</body>
+</html>

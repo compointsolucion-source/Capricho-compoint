@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Días festivos — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Días festivos</h1></div>
+    <div id="proximo"></div>
+
+    <div class="panel form-panel">
+      <div class="panel-head"><h2>Agregar día festivo</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid cols-4">
+          <div class="field"><label>Fecha</label><input type="date" name="fecha" required></div>
+          <div class="field"><label>Descripción</label><input type="text" name="descripcion" required placeholder="Ej. Aniversario de la empresa"></div>
+          <div class="field"><label>Tipo</label><select name="tipo"><option value="oficial">Oficial (LFT)</option><option value="personalizado">Personalizado</option></select></div>
+          <div class="field"><button type="submit" class="btn-primary">Agregar</button></div>
+        </div>
+      </form>
+    </div>
+
+    <div class="filtro-anio">
+      <label style="font-size:12px;text-transform:uppercase;color:var(--muted);font-weight:600;">Año</label>
+      <select class="select-input" id="anio"></select>
+      <span class="contador" id="contador"></span>
+      <button class="btn-mini" id="btnOficiales" style="margin-left:auto;">Cargar festivos oficiales (LFT) de este año</button>
+    </div>
+    <div class="panel" id="lista"><div class="cargando">Cargando...</div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+let anio = null;
+
+async function cargar() {
+  try {
+    const d = await api('/festivos' + (anio ? `?anio=${anio}` : ''));
+    anio = d.anio;
+    const anios = [...new Set([...d.anios, Number(d.hoy.slice(0, 4)) + 1])].sort();
+    document.getElementById('anio').innerHTML = anios.map((a) => `<option ${a === d.anio ? 'selected' : ''}>${a}</option>`).join('');
+    document.getElementById('contador').textContent = `${d.festivos.length} día(s) festivo(s) registrados`;
+    document.getElementById('proximo').innerHTML = d.proximo ? `<div class="proximo-card">
+      <div><div class="dias-num">${d.diasFaltan}</div><div class="dias-lbl">${d.diasFaltan === 1 ? 'día' : 'días'}</div></div>
+      <div class="detalle"><div class="dias-lbl">Próximo día festivo</div><div class="nombre">${esc(d.proximo.descripcion)}</div><div class="fecha">${fechaLarga(d.proximo.fecha)}</div></div>
+    </div>` : '';
+    const porMes = {};
+    d.festivos.forEach((f) => { const m = Number(f.fecha.slice(5, 7)) - 1; (porMes[m] ||= []).push(f); });
+    const l = document.getElementById('lista');
+    if (!d.festivos.length) { l.innerHTML = '<div class="empty-state">No hay días festivos en este año. Usa "Cargar festivos oficiales" para agregar los de la Ley Federal del Trabajo.</div>'; return; }
+    l.innerHTML = Object.keys(porMes).sort((a, b) => a - b).map((m) => `<div class="mes-header">${MES[m]}</div>` +
+      porMes[m].map((f) => `<div class="festivo-fila ${f.fecha < d.hoy ? 'fila-pasada' : ''}">
+        <div class="dia-box">${Number(f.fecha.slice(8))}</div>
+        <div class="info"><div class="desc">${esc(f.descripcion)}</div><div class="diasemana">${fechaLarga(f.fecha).split(',')[0]}</div></div>
+        <span class="tipo-pill tipo-${f.tipo}">${f.tipo === 'oficial' ? 'Oficial' : 'Personalizado'}</span>
+        <button class="accion-link rojo" onclick="eliminar(${f.id})">Eliminar</button>
+      </div>`).join('')).join('');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function eliminar(id) {
+  if (!confirm('¿Eliminar este día festivo?')) return;
+  try { await api(`/festivos/${id}`, { method: 'DELETE' }); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+
+document.getElementById('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target.elements;
+  try {
+    await api('/festivos', { method: 'POST', body: { fecha: f.fecha.value, descripcion: f.descripcion.value, tipo: f.tipo.value } });
+    anio = Number(f.fecha.value.slice(0, 4));
+    ev.target.reset();
+    toast('Día festivo agregado.');
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('anio').onchange = (e) => { anio = Number(e.target.value); cargar(); };
+document.getElementById('btnOficiales').onclick = async () => {
+  try {
+    const r = await api('/festivos/cargar-oficiales', { method: 'POST', body: { anio } });
+    toast(r.agregados ? `Se agregaron ${r.agregados} días oficiales de ${anio}.` : 'Ya estaban todos los días oficiales de ese año.');
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+};
+cargar();
+</script>
+</body>
+</html>

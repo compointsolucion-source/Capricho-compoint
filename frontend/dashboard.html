@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Dashboard — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <h1>Dashboard</h1>
+      <div class="fecha" id="fecha"></div>
+    </div>
+    <div id="avisoFestivo"></div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">Empleados activos</div><div class="value" id="kTotal">—</div></div>
+      <div class="kpi-card accent-forest"><div class="label">Presentes hoy</div><div class="value" id="kPresentes">—</div></div>
+      <div class="kpi-card accent-amber"><div class="label">Retardos hoy</div><div class="value" id="kRetardos">—</div></div>
+      <div class="kpi-card accent-red"><div class="label">Faltan por llegar</div><div class="value" id="kAusentes">—</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Checadas de hoy</h2><span style="font-size:11.5px;color:var(--muted-2);">Se actualiza cada 30 s</span></div>
+      <div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel();
+async function cargar() {
+  try {
+    const d = await api('/dashboard');
+    document.getElementById('fecha').textContent = fechaLarga(d.fecha);
+    document.getElementById('kTotal').textContent = d.total_empleados;
+    document.getElementById('kPresentes').textContent = d.presentes;
+    document.getElementById('kRetardos').textContent = d.retardos;
+    document.getElementById('kAusentes').textContent = d.ausentes;
+    document.getElementById('avisoFestivo').innerHTML = d.festivo ? `<div class="disclaimer">Hoy es día festivo: ${esc(d.festivo)}. No se esperan checadas.</div>` : '';
+    const t = document.getElementById('tabla');
+    if (!d.checadas.length) {
+      t.innerHTML = `<div class="empty-state">Todavía no hay checadas registradas hoy.<br>Abre la <a href="pantalla-qr.html" style="color:var(--neon)">Pantalla QR</a> en la entrada para que el personal empiece a checar.</div>`;
+      return;
+    }
+    t.innerHTML = `<table class="checadas"><thead><tr><th>Hora</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th>Método</th></tr></thead><tbody>
+      ${d.checadas.map((c) => `<tr>
+        <td class="hora">${hhmmss(c.hora)}</td>
+        <td>${esc(c.nombre)}</td>
+        <td>${esc(c.puesto || '—')}</td>
+        <td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
+        <td style="text-transform:capitalize;font-size:12.5px;" class="${c.metodo === 'manual' ? 'metodo-manual' : ''}">${esc(c.metodo)}${c.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+cargar();
+setInterval(cargar, 30000);
+</script>
+</body>
+</html>

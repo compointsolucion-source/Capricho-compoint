@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Registrar checada — Capricho-compoint</title>
+</head>
+<body>
+<div class="checar-wrap">
+  <div class="checar-card">
+    <div class="logo-chip"><img src="img/logo.png" alt="Compoint"></div>
+
+    <div id="pasoCargando"><p class="sub">Verificando código...</p></div>
+
+    <div id="pasoExpirado" class="paso-oculto">
+      <h2>Código expirado</h2>
+      <p class="sub">Este QR ya venció. Vuelve a escanear el que está en pantalla ahora mismo.</p>
+    </div>
+
+    <div id="pasoPin" class="paso-oculto">
+      <h2>Ingresa tu PIN</h2>
+      <p class="sub">4 dígitos que te asignó RH</p>
+      <input type="tel" inputmode="numeric" maxlength="4" pattern="[0-9]*" class="pin-input" id="pin" placeholder="••••" autocomplete="off">
+      <button type="button" class="btn-primary" id="btnValidarPin">Continuar</button>
+      <div id="resultadoPin" style="margin-top:18px;"></div>
+    </div>
+
+    <div id="pasoFacial" class="paso-oculto">
+      <h2>Verificando que seas tú</h2>
+      <p class="sub" id="nombreEmpleado"></p>
+      <div class="camara-box" id="camaraBox"><video id="video" autoplay muted playsinline></video></div>
+      <div class="estado-facial" id="estadoFacial">Cargando cámara...</div>
+    </div>
+
+    <div id="pasoResultado" class="paso-oculto"></div>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+const pinInput = document.getElementById('pin');
+const btn = document.getElementById('btnValidarPin');
+const resultadoPin = document.getElementById('resultadoPin');
+let empleadoActual = null;
+let stream = null;
+
+function mostrar(id) {
+  ['pasoCargando', 'pasoExpirado', 'pasoPin', 'pasoFacial', 'pasoResultado'].forEach((p) =>
+    document.getElementById(p).classList.toggle('paso-oculto', p !== id));
+}
+
+async function post(ruta, body) {
+  const r = await fetch(API_URL + ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let d = {};
+  try { d = await r.json(); } catch (_) {}
+  if (!r.ok && !d.error) d = { ok: false, error: 'Error del servidor. Intenta de nuevo.' };
+  return d;
+}
+
+(async function inicio() {
+  try {
+    const r = await fetch(`${API_URL}/qr/valido/${encodeURIComponent(token)}`).then((x) => x.json());
+    if (r.valido) { mostrar('pasoPin'); pinInput.focus(); } else mostrar('pasoExpirado');
+  } catch (_) {
+    document.getElementById('pasoCargando').innerHTML = '<div class="resultado error">Sin conexión con el servidor. Revisa tu internet y vuelve a escanear.</div>';
+  }
+})();
+
+pinInput.addEventListener('input', () => {
+  pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+  if (pinInput.value.length === 4) btn.focus();
+});
+pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+
+btn.addEventListener('click', async () => {
+  const pin = pinInput.value;
+  if (pin.length !== 4) { resultadoPin.innerHTML = '<div class="resultado error">Ingresa los 4 dígitos de tu PIN.</div>'; return; }
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  try {
+    const data = await post('/qr/pin', { token, pin });
+    if (!data.ok) {
+      resultadoPin.innerHTML = `<div class="resultado error">${esc(data.error)}</div>`;
+      btn.disabled = false; btn.textContent = 'Continuar';
+      return;
+    }
+    empleadoActual = data;
+    if (data.requiere_facial) {
+      mostrar('pasoFacial');
+      document.getElementById('nombreEmpleado').innerHTML = `<img class="foto-ref" src="${esc(urlArchivo(data.foto_url))}"> ${esc(data.nombre)}`;
+      iniciarVerificacionFacial();
+    } else {
+      registrarChecada(false, null);
+    }
+  } catch (e) {
+    resultadoPin.innerHTML = '<div class="resultado error">Error de conexión. Intenta de nuevo.</div>';
+    btn.disabled = false; btn.textContent = 'Continuar';
+  }
+});
+
+async function registrarChecada(verificadoFacial, foto) {
+  try {
+    const data = await post('/qr/checar', { token, pin: pinInput.value, verificado_facial: verificadoFacial, foto });
+    mostrarResultadoFinal(data);
+  } catch (e) {
+    mostrarResultadoFinal({ ok: false, error: 'Error de conexión al registrar la checada.' });
+  }
+}
+
+function mostrarResultadoFinal(data) {
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  mostrar('pasoResultado');
+  const c = document.getElementById('pasoResultado');
+  if (data.ok) {
+    if (navigator.vibrate) navigator.vibrate(120);
+    const titulo = data.tipo === 'entrada' ? 'Entrada registrada' : 'Salida registrada';
+    const saludo = data.tipo === 'entrada' ? '¡Buen día!' : '¡Hasta luego!';
+    c.innerHTML = `<div class="resultado ok">${titulo}<br><strong style="font-size:18px;">${esc(data.empleado)}</strong><div class="hora">${esc(data.hora)}</div></div>
+      <p class="sub" style="margin-top:18px;">${saludo} Ya puedes cerrar esta página.</p>`;
+  } else {
+    c.innerHTML = `<div class="resultado error">${esc(data.error)}</div>
+      <p class="sub" style="margin-top:18px;">Vuelve a escanear el QR de la pantalla.</p>`;
+  }
+}
+
+// ---------- Verificación facial (face-api.js, se carga solo si se necesita) ----------
+function cargarScript(src) {
+  return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = mal; document.head.appendChild(s); });
+}
+
+async function iniciarVerificacionFacial() {
+  const estado = document.getElementById('estadoFacial');
+  const caja = document.getElementById('camaraBox');
+  const video = document.getElementById('video');
+  const sinVerificar = (msg) => { estado.textContent = msg; setTimeout(() => registrarChecada(false, null), 1500); };
+  try {
+    estado.textContent = 'Cargando reconocimiento facial...';
+    await cargarScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
+    const MODELOS = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODELOS);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODELOS);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODELOS);
+  } catch (e) { return sinVerificar('No se pudo cargar el reconocimiento facial. Registrando sin verificación.'); }
+
+  estado.textContent = 'Analizando tu foto de referencia...';
+  let ref;
+  try {
+    const img = await faceapi.fetchImage(urlArchivo(empleadoActual.foto_url));
+    ref = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+  } catch (_) { ref = null; }
+  if (!ref) return sinVerificar('No se pudo leer tu foto de referencia. Registrando sin verificación facial.');
+
+  estado.textContent = 'Activando cámara...';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    video.srcObject = stream;
+  } catch (e) { return sinVerificar('No se pudo acceder a la cámara. Registrando sin verificación facial.'); }
+  await new Promise((r) => { video.onloadedmetadata = r; });
+
+  estado.textContent = 'Parpadea para confirmar que eres tú...';
+  caja.classList.add('buscando');
+  let ojosAbiertosPrevio = true, intentos = 0, ocupado = false;
+  const ear = (p) => {
+    const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    return (d(p[1], p[5]) + d(p[2], p[4])) / (2 * d(p[0], p[3]));
+  };
+  const intervalo = setInterval(async () => {
+    if (ocupado) return;
+    ocupado = true;
+    try {
+      intentos++;
+      if (intentos > 200) {
+        clearInterval(intervalo);
+        estado.textContent = 'No se detectó parpadeo.';
+        setTimeout(() => mostrarResultadoFinal({ ok: false, error: 'No se detectó parpadeo. Intenta de nuevo o pide ayuda a RH.' }), 1200);
+        return;
+      }
+      const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+      if (!det) return;
+      const prom = (ear(det.landmarks.getLeftEye()) + ear(det.landmarks.getRightEye())) / 2;
+      const abiertos = prom > 0.25;
+      const parpadeo = !ojosAbiertosPrevio && abiertos;
+      ojosAbiertosPrevio = abiertos;
+      if (!parpadeo) return;
+
+      clearInterval(intervalo);
+      estado.textContent = 'Parpadeo detectado. Comparando rostro...';
+      const completa = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+      if (!completa) return sinVerificar('No se pudo leer tu rostro. Registrando checada sin verificación.');
+      const coincide = faceapi.euclideanDistance(ref.descriptor, completa.descriptor) < 0.5;
+      const canvas = document.createElement('canvas');
+      const escala = Math.min(1, 480 / video.videoWidth);
+      canvas.width = video.videoWidth * escala; canvas.height = video.videoHeight * escala;
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      const foto = canvas.toDataURL('image/jpeg', 0.7);
+      if (coincide) {
+        caja.classList.remove('buscando'); caja.classList.add('ok');
+        estado.textContent = 'Coincide. Registrando checada...';
+        setTimeout(() => registrarChecada(true, foto), 700);
+      } else {
+        estado.textContent = 'El rostro no coincide con la foto registrada.';
+        setTimeout(() => mostrarResultadoFinal({ ok: false, error: 'El rostro no coincide con el empleado del PIN ingresado.' }), 1300);
+      }
+    } finally { ocupado = false; }
+  }, 200);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Auditoría — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Auditoría</h1></div>
+    <p style="color:var(--muted);font-size:13px;margin-top:-14px;margin-bottom:20px;">Registro de todas las checadas creadas, editadas o eliminadas manualmente desde el panel (últimos 200 movimientos).</p>
+    <div class="panel"><div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div></div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const ETQ = { creada: 'Creada', editada: 'Editada', eliminada: 'Eliminada' };
+api('/checadas/auditoria').then((rs) => {
+  const t = document.getElementById('tabla');
+  if (!rs.length) { t.innerHTML = '<div class="empty-state">Todavía no hay cambios manuales registrados. Esto es buena señal.</div>'; return; }
+  t.innerHTML = `<table class="checadas"><thead><tr><th>Fecha/hora</th><th>Empleado</th><th>Acción</th><th>Antes</th><th>Después</th><th>Realizado por</th></tr></thead><tbody>
+    ${rs.map((r) => `<tr>
+      <td class="hora">${fechaHora(r.creado_en)}</td>
+      <td>${esc(r.empleado_nombre)}</td>
+      <td><span class="accion-pill accion-${r.accion}">${ETQ[r.accion]}</span></td>
+      <td class="hora">${esc(r.valor_anterior || '—')}</td>
+      <td class="hora">${esc(r.valor_nuevo || '—')}</td>
+      <td>${esc(r.admin_nombre || '(usuario eliminado)')}</td>
+    </tr>`).join('')}</tbody></table>`;
+}).catch((e) => toast(e.message, 'error'));
+</script>
+</body>
+</html>

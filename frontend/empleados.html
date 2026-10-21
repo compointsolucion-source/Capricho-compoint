@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Empleados — Capricho-compoint</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar">
+      <h1>Empleados</h1>
+      <button class="btn-primary inline" id="btnNuevo">+ Nuevo empleado</button>
+    </div>
+
+    <div class="panel form-panel paso-oculto" id="panelForm">
+      <div class="panel-head"><h2 id="tituloForm">Nuevo empleado</h2></div>
+      <form id="form" class="panel-body">
+        <div id="fotoActual"></div>
+        <div class="form-grid">
+          <div class="field full"><label>Nombre completo</label><input type="text" name="nombre" required></div>
+          <div class="field"><label>Puesto</label><input type="text" name="puesto"></div>
+          <div class="field"><label>Departamento</label><input type="text" name="departamento" placeholder="Ej. Ventas" list="listaDeptos"></div>
+          <div class="field"><label>Sucursal</label><input type="text" name="sucursal" placeholder="Ej. Matriz Guadalajara" list="listaSucursales"></div>
+          <div class="field"><label>Número de empleado <span style="text-transform:none;letter-spacing:0;">(para el portal)</span></label><input type="text" name="numero_empleado"></div>
+          <div class="field"><label>Horario asignado</label><select name="horario_id" id="selHorario"><option value="">— Sin asignar —</option></select></div>
+          <div class="field"><label>Fecha de ingreso</label><input type="date" name="fecha_ingreso"></div>
+          <div class="field"><label id="lblPin">PIN de 4 dígitos (para checar por QR)</label><input type="text" name="pin" maxlength="4" inputmode="numeric" pattern="\d{4}" placeholder="••••" autocomplete="off"></div>
+          <div class="field"><label>ID de huella <span style="text-transform:none;letter-spacing:0;">(lo asigna el lector)</span></label><input type="text" name="huella_id" placeholder="Opcional"></div>
+          <div class="field full"><label>Fotografía (para verificación facial)</label><input type="file" id="foto" accept="image/jpeg,image/png,image/webp"></div>
+        </div>
+        <div class="checkbox-row"><input type="checkbox" name="activo" id="activo" checked><label for="activo">Empleado activo</label></div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary inline" id="btnGuardar">Guardar</button>
+          <button type="button" class="btn-secondary" id="btnCancelar">Cancelar</button>
+        </div>
+      </form>
+    </div>
+    <datalist id="listaDeptos"></datalist>
+    <datalist id="listaSucursales"></datalist>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Todos los empleados</h2><input type="search" id="buscar" placeholder="Buscar..." class="select-input" style="width:220px;padding:8px 12px;"></div>
+      <div id="tabla" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+const form = document.getElementById('form');
+const panel = document.getElementById('panelForm');
+let empleados = [];
+let editandoId = null;
+
+async function cargarHorarios() {
+  const hs = await api('/horarios');
+  document.getElementById('selHorario').innerHTML = '<option value="">— Sin asignar —</option>' +
+    hs.filter((h) => h.activo).map((h) => `<option value="${h.id}">${esc(h.nombre)}</option>`).join('');
+}
+
+async function cargar() {
+  try {
+    empleados = await api('/empleados');
+    const unicos = (k) => [...new Set(empleados.map((e) => e[k]).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join('');
+    document.getElementById('listaDeptos').innerHTML = unicos('departamento');
+    document.getElementById('listaSucursales').innerHTML = unicos('sucursal');
+    pintar();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function pintar() {
+  const q = document.getElementById('buscar').value.trim().toLowerCase();
+  const lista = empleados.filter((e) => !q || [e.nombre, e.puesto, e.departamento, e.numero_empleado].join(' ').toLowerCase().includes(q));
+  const t = document.getElementById('tabla');
+  if (!empleados.length) { t.innerHTML = '<div class="empty-state">Aún no hay empleados registrados. Da de alta el primero con "+ Nuevo empleado".</div>'; return; }
+  t.innerHTML = `<table class="checadas"><thead><tr><th>Empleado</th><th>No.</th><th>Depto / Sucursal</th><th>Horario</th><th>PIN</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+    ${lista.map((e) => `<tr>
+      <td>${e.foto_url ? `<img class="avatar-thumb" src="${esc(urlArchivo(e.foto_url))}" alt="">` : `<span class="avatar-placeholder">${esc(e.nombre.charAt(0).toUpperCase())}</span>`}${esc(e.nombre)}
+        <span class="sub-celda">${esc(e.puesto || '—')}</span></td>
+      <td class="hora">${esc(e.numero_empleado || '—')}</td>
+      <td>${esc(e.departamento || '—')}${e.sucursal ? ' · ' + esc(e.sucursal) : ''}</td>
+      <td>${esc(e.horario_nombre || '—')}</td>
+      <td>${e.tiene_pin ? '<span class="badge badge-entrada">Configurado</span>' : '<span class="badge badge-salida">Sin PIN</span>'}</td>
+      <td>${e.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
+      <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${e.id})">Editar</button>
+        <button class="accion-link" onclick="alternar(${e.id}, ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function abrirForm(emp) {
+  editandoId = emp ? emp.id : null;
+  form.reset();
+  document.getElementById('tituloForm').textContent = emp ? 'Editar empleado' : 'Nuevo empleado';
+  document.getElementById('lblPin').textContent = emp ? 'PIN de 4 dígitos (déjalo vacío para no cambiarlo)' : 'PIN de 4 dígitos (para checar por QR)';
+  document.getElementById('fotoActual').innerHTML = emp && emp.foto_url
+    ? `<div class="foto-actual"><img src="${esc(urlArchivo(emp.foto_url))}" alt=""><span style="font-size:12.5px;color:var(--muted);">Foto actual — sube otra abajo para reemplazarla</span></div>` : '';
+  if (emp) {
+    ['nombre', 'puesto', 'departamento', 'sucursal', 'numero_empleado', 'fecha_ingreso', 'huella_id'].forEach((k) => { form.elements[k].value = emp[k] || ''; });
+    form.elements.horario_id.value = emp.horario_id || '';
+    form.elements.activo.checked = emp.activo;
+  } else {
+    form.elements.activo.checked = true;
+  }
+  panel.classList.remove('paso-oculto');
+  document.getElementById('btnNuevo').classList.add('paso-oculto');
+  panel.scrollIntoView({ behavior: 'smooth' });
+  form.elements.nombre.focus();
+}
+function cerrarForm() {
+  panel.classList.add('paso-oculto');
+  document.getElementById('btnNuevo').classList.remove('paso-oculto');
+}
+function editar(id) { abrirForm(empleados.find((e) => e.id === id)); }
+
+async function alternar(id, activo) {
+  if (!confirm(`¿${activo ? 'Desactivar' : 'Activar'} a este empleado?`)) return;
+  try { await api(`/empleados/${id}/toggle`, { method: 'PATCH' }); toast('Estado actualizado'); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  try {
+    const f = form.elements;
+    const body = {
+      nombre: f.nombre.value, puesto: f.puesto.value, departamento: f.departamento.value, sucursal: f.sucursal.value,
+      numero_empleado: f.numero_empleado.value, horario_id: f.horario_id.value || null, fecha_ingreso: f.fecha_ingreso.value || null,
+      pin: f.pin.value.trim(), huella_id: f.huella_id.value, activo: f.activo.checked,
+      foto: await leerArchivo(document.getElementById('foto'))
+    };
+    if (editandoId) await api(`/empleados/${editandoId}`, { method: 'PUT', body });
+    else await api('/empleados', { method: 'POST', body });
+    toast('Guardado correctamente.');
+    cerrarForm();
+    cargar();
+  } catch (e) { toast(e.message, 'error'); }
+  btn.disabled = false;
+});
+
+document.getElementById('btnNuevo').onclick = () => abrirForm(null);
+document.getElementById('btnCancelar').onclick = cerrarForm;
+document.getElementById('buscar').oninput = pintar;
+cargarHorarios().catch(() => {});
+cargar();
+</script>
+</body>
+</html>
