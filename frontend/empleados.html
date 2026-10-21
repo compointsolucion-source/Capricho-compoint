@@ -34,6 +34,7 @@
           <div class="field"><label>Horario asignado</label><select name="horario_id" id="selHorario"><option value="">— Sin asignar —</option></select></div>
           <div class="field"><label>Fecha de ingreso</label><input type="date" name="fecha_ingreso"></div>
           <div class="field"><label>Sueldo por día <span style="text-transform:none;letter-spacing:0;">(para la nómina semanal)</span></label><input type="text" name="sueldo_diario" inputmode="decimal" placeholder="$0"></div>
+          <div class="field"><label>Correo <span style="text-transform:none;letter-spacing:0;">(opcional, para recuperar su PIN)</span></label><input type="email" name="correo" placeholder="nombre@correo.com" autocomplete="off"></div>
           <div class="field"><label id="lblPin">PIN de 4 dígitos (para checar por QR)</label><input type="text" name="pin" maxlength="4" inputmode="numeric" pattern="\d{4}" placeholder="••••" autocomplete="off"></div>
           <div class="field"><label>ID de huella <span style="text-transform:none;letter-spacing:0;">(lo asigna el lector)</span></label><input type="text" name="huella_id" placeholder="Opcional"></div>
           <div class="field full"><label>Fotografía (con ella se comparan las selfies de cada checada: de frente, sin lentes oscuros ni gorra, con buena luz)</label><input type="file" id="foto" accept="image/jpeg,image/png,image/webp"></div>
@@ -99,7 +100,8 @@ function pintar() {
         <button class="accion-link" style="padding-left:0;" onclick="liberarCelular(${e.id})">Liberar</button>` : '<span style="color:var(--muted)">Al checar</span>'}</td>
       <td>${e.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
       <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${e.id})">Editar</button>
-        <button class="accion-link" onclick="alternar(${e.id}, ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button></td>
+        <button class="accion-link" onclick="alternar(${e.id}, ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button>
+        <button class="accion-link rojo" onclick="eliminar(${e.id})">Eliminar</button></td>
     </tr>`).join('')}</tbody></table>`;
 }
 
@@ -111,7 +113,7 @@ function abrirForm(emp) {
   document.getElementById('fotoActual').innerHTML = emp && emp.foto_url
     ? `<div class="foto-actual"><img src="${esc(urlArchivo(emp.foto_url))}" alt=""><span style="font-size:12.5px;color:var(--muted);">Foto actual — sube otra abajo para reemplazarla</span></div>` : '';
   if (emp) {
-    ['nombre', 'puesto', 'departamento', 'sucursal', 'numero_empleado', 'fecha_ingreso', 'huella_id'].forEach((k) => { form.elements[k].value = emp[k] || ''; });
+    ['nombre', 'puesto', 'departamento', 'sucursal', 'numero_empleado', 'fecha_ingreso', 'huella_id', 'correo'].forEach((k) => { form.elements[k].value = emp[k] || ''; });
     form.elements.sueldo_diario.value = Number(emp.sueldo_diario) || '';
     form.elements.horario_id.value = emp.horario_id || '';
     form.elements.activo.checked = emp.activo;
@@ -135,6 +137,24 @@ async function alternar(id, activo) {
   catch (e) { toast(e.message, 'error'); }
 }
 
+// Eliminar definitivamente (con su historial). Para quien solo dejó de trabajar, mejor Desactivar.
+async function eliminar(id) {
+  const e = empleados.find((x) => x.id === id);
+  let h;
+  try { h = await api(`/empleados/${id}/historial`); } catch (er) { return toast(er.message, 'error'); }
+  const conHistorial = h.checadas || h.pagos || h.incidencias || h.bonos;
+  const detalle = conHistorial
+    ? `<b style="color:var(--amber)">Tiene historial:</b> ${h.checadas} checadas, ${h.pagos} pagos de nómina (${$m(h.pagado)}), ${h.incidencias} incidencias y ${h.bonos} bonos.
+       Todo eso también se borra y <b>cambian los totales de las semanas pasadas</b>.<br><br>Si solo dejó de trabajar aquí, mejor usa <b>Desactivar</b>: ya no podrá checar y su historial se conserva.`
+    : 'No tiene checadas, pagos ni incidencias.';
+  const v = await preguntar(`Eliminar a ${e.nombre}`, `${detalle}<br><br>Esto no se puede deshacer. Escribe <b>ELIMINAR</b> para confirmar.`,
+    { boton: 'Eliminar para siempre', peligro: true, campo: { label: 'Confirmación', html: '<input name="valor" class="select-input" autocomplete="off" placeholder="ELIMINAR">' } });
+  if (v === null) return;
+  if (String(v).trim().toUpperCase() !== 'ELIMINAR') return toast('No se eliminó: escribe ELIMINAR para confirmar.', 'error');
+  try { await api(`/empleados/${id}`, { method: 'DELETE' }); toast(`${e.nombre} fue eliminado. Quedó registrado en Auditoría.`); if (editandoId === id) cerrarForm(); cargar(); }
+  catch (er) { toast(er.message, 'error'); }
+}
+
 async function liberarCelular(id) {
   const e = empleados.find((x) => x.id === id);
   if (!confirm(`¿Liberar el celular de ${e.nombre}? El siguiente celular con el que cheque quedará registrado como suyo (úsalo si cambió de celular o lo perdió).`)) return;
@@ -150,7 +170,7 @@ form.addEventListener('submit', async (ev) => {
     const f = form.elements;
     const body = {
       nombre: f.nombre.value, puesto: f.puesto.value, departamento: f.departamento.value, sucursal: f.sucursal.value,
-      numero_empleado: f.numero_empleado.value, horario_id: f.horario_id.value || null, fecha_ingreso: f.fecha_ingreso.value || null,
+      numero_empleado: f.numero_empleado.value, correo: f.correo.value.trim(), horario_id: f.horario_id.value || null, fecha_ingreso: f.fecha_ingreso.value || null,
       pin: f.pin.value.trim(), huella_id: f.huella_id.value, activo: f.activo.checked, sueldo_diario: f.sueldo_diario.value,
       foto: await leerArchivo(document.getElementById('foto'))
     };

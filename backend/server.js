@@ -44,6 +44,7 @@ app.get('/', (req, res) => {
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/recuperar', require('./routes/recuperar'));
 app.use('/api/empleados', require('./routes/empleados'));
 app.use('/api/horarios', require('./routes/horarios'));
 app.use('/api/festivos', require('./routes/festivos'));

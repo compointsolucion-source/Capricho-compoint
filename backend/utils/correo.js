@@ -11,7 +11,7 @@ async function obtenerConfigSmtp() {
 // Regresa true si se envió, o un texto con el error.
 async function enviarCorreo(destinatario, asunto, cuerpoHtml) {
   const c = await obtenerConfigSmtp();
-  if (!c) return 'No has configurado el correo todavía. Ve a Configuración → Correo para alertas.';
+  if (!c) return 'No has configurado el correo todavía. Ve a Configuración → Correo del sistema.';
   const { rows } = await pool.query('SELECT empresa_nombre FROM configuracion WHERE id = 1');
   try {
     const transporte = nodemailer.createTransport({

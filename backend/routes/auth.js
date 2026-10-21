@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
@@ -71,6 +72,36 @@ router.post('/cambiar-password', verificarToken, async (req, res, next) => {
     if (errores.length) return res.status(400).json({ error: errores.join(' ') });
     await pool.query('UPDATE administradores SET password_hash = $1 WHERE id = $2', [await bcrypt.hash(nueva, 10), req.usuario.id]);
     res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Mi cuenta: correo para recuperar la contraseña y código de recuperación
+router.get('/mi-cuenta', verificarToken, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT correo, (codigo_recuperacion_hash IS NOT NULL) AS tiene_codigo, codigo_recuperacion_en FROM administradores WHERE id = $1', [req.usuario.id]);
+    res.json(rows[0] || {});
+  } catch (e) { next(e); }
+});
+
+router.put('/mi-cuenta', verificarToken, async (req, res, next) => {
+  try {
+    const correo = String(req.body.correo || '').trim();
+    if (correo && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) return res.status(400).json({ error: 'El correo no es válido.' });
+    await pool.query('UPDATE administradores SET correo = $1 WHERE id = $2', [correo || null, req.usuario.id]);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Genera un código nuevo (el anterior deja de servir). Se muestra UNA sola vez.
+router.post('/codigo-recuperacion', verificarToken, async (req, res, next) => {
+  try {
+    const LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.randomBytes(12);
+    const codigo = Array.from(bytes, (b) => LETRAS[b % LETRAS.length]).join('');
+    await pool.query('UPDATE administradores SET codigo_recuperacion_hash = $1, codigo_recuperacion_en = NOW() WHERE id = $2',
+      [await bcrypt.hash(codigo, 10), req.usuario.id]);
+    res.json({ ok: true, codigo: codigo.match(/.{4}/g).join('-') });
   } catch (e) { next(e); }
 });
 

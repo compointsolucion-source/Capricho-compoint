@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Recuperar acceso — Capricho-compoint</title>
+<style>
+  .rec-ok { background: var(--neon-bg); border: 1px solid rgba(93,247,106,.35); color: var(--white); border-radius: 10px; padding: 14px; font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; }
+  .rec-nota { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; line-height: 1.5; }
+  .codigo-input { font-family: var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+  .pin-dos { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pin-dos input { font-family: var(--font-mono); font-size: 22px; letter-spacing: .4em; text-align: center; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-brand">
+    <div class="logo-slot"><div class="logo-chip"><img src="img/logo.png" alt="Compoint"></div></div>
+    <div class="claim">
+      <div class="eyebrow">Recuperar acceso</div>
+      <h1>¿Se te olvidó? <span class="accent">Sin problema.</span></h1>
+      <p>Te enviamos un enlace a tu correo para crear una contraseña nueva. El enlace dura 30 minutos y solo sirve una vez.</p>
+    </div>
+    <div class="foot-note">capricho-compoint · compoint.com.mx</div>
+  </div>
+  <div class="login-form-side">
+    <div class="login-form" id="caja"></div>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+const qs = new URLSearchParams(location.search);
+const token = qs.get('t');
+const esEmpleado = qs.get('para') === 'empleado';
+const caja = document.getElementById('caja');
+const volver = (emp) => `<p class="sub" style="margin-top:22px;text-align:center;"><a href="${emp ? 'portal.html' : 'login.html'}" style="color:var(--neon);">← Volver a ${emp ? 'mi portal' : 'iniciar sesión'}</a></p>`;
+const err = (m) => `<div class="alert alert-error">${esc(m)}</div>`;
+const pub = (ruta, body) => api('/recuperar' + ruta, { method: body ? 'POST' : 'GET', body, sinRedirigir: true, tokenKey: 'nada' });
+
+// ---------- 1. Pedir el enlace por correo ----------
+function vistaSolicitar(modo = 'correo') {
+  if (esEmpleado) {
+    caja.innerHTML = `<h2>¿Olvidaste tu PIN?</h2>
+      <p class="sub">Escribe tu número de empleado. Si tienes correo registrado, te llega un enlace para crear un PIN nuevo.</p>
+      <div id="msg"></div>
+      <form id="f"><div class="field"><label>Número de empleado</label><input type="text" name="dato" required autocomplete="username" inputmode="numeric"></div>
+      <button type="submit" class="btn-primary" id="btn">Enviarme el enlace</button></form>
+      <p class="rec-nota">¿No tienes correo registrado? Pide a tu encargado que te asigne un PIN nuevo desde Empleados.</p>${volver(true)}`;
+  } else if (modo === 'correo') {
+    caja.innerHTML = `<h2>Recuperar contraseña</h2>
+      <div class="tabs" style="margin:6px 0 16px;"><button class="tab active">Por correo</button><button class="tab" onclick="vistaSolicitar('codigo')">Con código de recuperación</button></div>
+      <p class="sub">Escribe tu usuario o el correo registrado en tu cuenta.</p>
+      <div id="msg"></div>
+      <form id="f"><div class="field"><label>Usuario o correo</label><input type="text" name="dato" required autocomplete="username" autofocus></div>
+      <button type="submit" class="btn-primary" id="btn">Enviarme el enlace</button></form>
+      <p class="rec-nota">¿No tienes correo registrado? Usa tu <b>código de recuperación</b> o pide a otro administrador que te ponga una contraseña nueva en Configuración → Usuarios del panel.</p>${volver(false)}`;
+  } else {
+    caja.innerHTML = `<h2>Recuperar contraseña</h2>
+      <div class="tabs" style="margin:6px 0 16px;"><button class="tab" onclick="vistaSolicitar('correo')">Por correo</button><button class="tab active">Con código de recuperación</button></div>
+      <p class="sub">Usa el código de 12 letras y números que guardaste. Después de usarlo, genera uno nuevo en Configuración.</p>
+      <div id="msg"></div>
+      <form id="fc">
+        <div class="field"><label>Usuario</label><input type="text" name="usuario" required autocomplete="username"></div>
+        <div class="field"><label>Código de recuperación</label><input type="text" name="codigo" class="codigo-input" required placeholder="XXXX-XXXX-XXXX" autocomplete="off"></div>
+        <div class="field"><label>Contraseña nueva</label><input type="password" name="nueva" required minlength="6" autocomplete="new-password"></div>
+        <div class="field"><label>Confirmar contraseña nueva</label><input type="password" name="confirmar" required minlength="6" autocomplete="new-password"></div>
+        <button type="submit" class="btn-primary" id="btn">Cambiar contraseña</button>
+      </form>${volver(false)}`;
+    document.getElementById('fc').onsubmit = async (ev) => {
+      ev.preventDefault();
+      const f = ev.target.elements, b = document.getElementById('btn');
+      b.disabled = true;
+      try {
+        await pub('/codigo', { usuario: f.usuario.value.trim(), codigo: f.codigo.value, nueva: f.nueva.value, confirmar: f.confirmar.value });
+        listo(false, 'Tu contraseña quedó cambiada. Ese código ya no sirve: entra y genera uno nuevo en Configuración → Mi cuenta.');
+      } catch (e) { document.getElementById('msg').innerHTML = err(e.message); b.disabled = false; }
+    };
+    return;
+  }
+  document.getElementById('f').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const b = document.getElementById('btn');
+    b.disabled = true; b.textContent = 'Enviando...';
+    try {
+      const r = await pub('/solicitar', { tipo: esEmpleado ? 'empleado' : 'admin', dato: ev.target.elements.dato.value.trim() });
+      document.getElementById('msg').innerHTML = `<div class="rec-ok">📧 ${esc(r.mensaje)}</div>`;
+      ev.target.style.display = 'none';
+    } catch (e) {
+      document.getElementById('msg').innerHTML = err(e.message);
+      b.disabled = false; b.textContent = 'Enviarme el enlace';
+    }
+  };
+}
+
+// ---------- 2. Llegó del enlace del correo ----------
+async function vistaToken() {
+  caja.innerHTML = '<p class="sub">Revisando el enlace...</p>';
+  let info;
+  try { info = await pub('/token/' + encodeURIComponent(token)); }
+  catch (e) {
+    caja.innerHTML = `<h2>Enlace no válido</h2>${err(e.message)}
+      <a class="btn-primary" style="display:block;text-align:center;margin-top:10px;" href="recuperar.html${esEmpleado ? '?para=empleado' : ''}">Pedir un enlace nuevo</a>${volver(esEmpleado)}`;
+    return;
+  }
+  const emp = info.tipo === 'empleado';
+  caja.innerHTML = emp
+    ? `<h2>Hola, ${esc(info.nombre)}</h2><p class="sub">Elige tu PIN nuevo de 4 números. Es el mismo que usas para checar y para entrar a tu portal.</p>
+       <div id="msg"></div><form id="fn"><div class="pin-dos">
+         <div class="field"><label>PIN nuevo</label><input type="password" name="nueva" inputmode="numeric" maxlength="4" pattern="\\d{4}" required autocomplete="new-password"></div>
+         <div class="field"><label>Confírmalo</label><input type="password" name="confirmar" inputmode="numeric" maxlength="4" pattern="\\d{4}" required autocomplete="new-password"></div></div>
+       <button type="submit" class="btn-primary" id="btn">Guardar PIN</button></form>`
+    : `<h2>Hola, ${esc(info.nombre)}</h2><p class="sub">Escribe tu contraseña nueva (mínimo 6 caracteres).</p>
+       <div id="msg"></div><form id="fn">
+         <div class="field"><label>Contraseña nueva</label><input type="password" name="nueva" minlength="6" required autocomplete="new-password"></div>
+         <div class="field"><label>Confirmar contraseña nueva</label><input type="password" name="confirmar" minlength="6" required autocomplete="new-password"></div>
+       <button type="submit" class="btn-primary" id="btn">Guardar contraseña</button></form>`;
+  document.getElementById('fn').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const f = ev.target.elements, b = document.getElementById('btn');
+    b.disabled = true;
+    try {
+      await pub('/token/' + encodeURIComponent(token), { nueva: f.nueva.value, confirmar: f.confirmar.value });
+      listo(emp, emp ? 'Tu PIN nuevo quedó guardado. Úsalo desde ahora para checar y para entrar a tu portal.' : 'Tu contraseña nueva quedó guardada. Ya puedes entrar.');
+    } catch (e) { document.getElementById('msg').innerHTML = err(e.message); b.disabled = false; }
+  };
+}
+
+function listo(emp, texto) {
+  caja.innerHTML = `<h2>¡Listo!</h2><div class="rec-ok">✓ ${esc(texto)}</div>
+    <a class="btn-primary" style="display:block;text-align:center;" href="${emp ? 'portal.html' : 'login.html'}">${emp ? 'Ir a mi portal' : 'Iniciar sesión'}</a>`;
+}
+
+if (token) vistaToken(); else vistaSolicitar();
+</script>
+</body>
+</html>

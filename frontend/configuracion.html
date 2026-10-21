@@ -38,7 +38,16 @@
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>Cambiar mi contraseña</h2></div>
+        <div class="panel-head"><h2>Mi cuenta</h2></div>
+        <form id="formCuenta" class="panel-body" style="border-bottom:1px solid var(--line);">
+          <div class="field"><label>Mi correo <span style="text-transform:none;letter-spacing:0;">(para recuperar mi contraseña si la olvido)</span></label><input type="email" name="correo" placeholder="tucorreo@gmail.com" autocomplete="email"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button type="submit" class="btn-primary inline">Guardar correo</button>
+            <button type="button" class="btn-secondary" id="btnCodigo">🔑 Código de recuperación</button>
+          </div>
+          <p id="estadoCodigo" style="font-size:12px;color:var(--muted);margin:10px 0 0;"></p>
+        </form>
+        <div class="panel-head" style="border-top:none;"><h2 style="font-size:13px;">Cambiar mi contraseña</h2></div>
         <form id="formPass" class="panel-body">
           <div class="field"><label>Contraseña actual</label><input type="password" name="actual" required autocomplete="current-password"></div>
           <div class="field"><label>Nueva contraseña</label><input type="password" name="nueva" required minlength="6" autocomplete="new-password"></div>
@@ -62,29 +71,35 @@
           <div class="field" style="grid-column: span 3;"><label>Avisar por correo cada que se cierre un corte (opcional)</label><input name="aviso_corte_correo" type="email" placeholder="tucorreo@gmail.com"></div>
         </div>
         <div class="checkbox-row"><input type="checkbox" name="bono_pierde_con_falta" id="pierde"><label for="pierde">Si falta un día en la semana, pierde todo el bono de puntualidad de esa semana</label></div>
-        <p style="font-size:12px;color:var(--muted);margin:-6px 0 16px;">El bono se gana cuando la primera entrada del día es antes o a la hora de su horario (más los minutos de gracia). El aviso por correo usa la configuración de "Correo para alertas".</p>
+        <p style="font-size:12px;color:var(--muted);margin:-6px 0 16px;">El bono se gana cuando la primera entrada del día es antes o a la hora de su horario (más los minutos de gracia). El aviso por correo usa la configuración de "Correo del sistema".</p>
         <button type="submit" class="btn-primary inline">Guardar reglas</button>
       </form>
     </div>
 
     <div class="config-grid" style="margin-bottom:20px;">
-      <div class="panel">
-        <div class="panel-head"><h2>Usuarios del panel</h2></div>
+      <div class="panel" style="grid-column: 1 / -1;">
+        <div class="panel-head"><h2>Usuarios del panel</h2><span style="font-size:11.5px;color:var(--muted-2);">Con correo registrado, cada usuario puede recuperar su contraseña solo</span></div>
         <div id="usuarios" class="tabla-scroll"></div>
         <form id="formUsuario" class="panel-body" style="border-top:1px solid var(--line);">
+          <div id="tituloUsuario" style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">Nuevo usuario</div>
           <div class="form-grid">
             <div class="field"><label>Nombre</label><input type="text" name="nombre" required></div>
             <div class="field"><label>Usuario</label><input type="text" name="usuario" required autocomplete="off"></div>
-            <div class="field"><label>Contraseña</label><input type="password" name="password" required minlength="6" autocomplete="new-password"></div>
+            <div class="field"><label>Correo <span style="text-transform:none;letter-spacing:0;">(para recuperar)</span></label><input type="email" name="correo" autocomplete="off"></div>
+            <div class="field" id="campoPassNuevo"><label>Contraseña</label><input type="password" name="password" minlength="6" autocomplete="new-password"></div>
             <div class="field"><label>Rol</label><select name="rol" id="selRol"><option value="admin">Administrador (RH)</option><option value="supervisor">Supervisor</option></select></div>
             <div class="field full" id="campoEmpSup" style="display:none;"><label>Es el empleado... (para saber de quién es jefe)</label><select name="empleado_id" id="selEmpSup"></select></div>
           </div>
-          <button type="submit" class="btn-primary inline">+ Crear usuario</button>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary inline" id="btnUsuario">+ Crear usuario</button>
+            <button type="button" class="btn-secondary paso-oculto" id="btnCancelarUsuario">Cancelar</button>
+          </div>
         </form>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>Correo para alertas</h2></div>
+        <div class="panel-head"><h2>Correo del sistema</h2></div>
+        <p style="font-size:12px;color:var(--muted);margin:14px 20px 0;">Desde esta cuenta salen las alertas, el aviso de corte cerrado y los enlaces de <b>"¿Olvidaste tu contraseña?"</b> y <b>"¿Olvidaste tu PIN?"</b>.</p>
         <form id="formSmtp" class="panel-body">
           <div class="field"><label>Proveedor</label>
             <select name="proveedor" id="selProv"><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="otro">Otro (mi dominio)</option></select>
@@ -141,15 +156,17 @@ async function cargar() {
     ['proveedor', 'host', 'puerto', 'usuario', 'correo_remitente', 'nombre_remitente'].forEach((k) => { fs[k].value = s[k] || ''; });
     document.getElementById('lblPassSmtp').textContent = s.tiene_contrasena ? '(ya guardada — déjala vacía para no cambiarla)' : '';
     document.getElementById('selEmpSup').innerHTML = '<option value="">— Selecciona —</option>' + conf.empleados.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
-    document.getElementById('usuarios').innerHTML = `<table class="checadas"><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>
+    usuarios = conf.usuarios;
+    document.getElementById('usuarios').innerHTML = `<table class="checadas"><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
       ${conf.usuarios.map((u) => `<tr>
-        <td>${esc(u.nombre)}${u.empleado_nombre ? `<span class="sub-celda" style="margin-left:0">Empleado: ${esc(u.empleado_nombre)}</span>` : ''}</td>
-        <td class="hora">${esc(u.usuario)}</td>
+        <td>${esc(u.nombre)}${u.id === yo.id ? ' <span style="font-size:11px;color:var(--muted)">(tú)</span>' : ''}<span class="sub-celda" style="margin-left:0">${u.correo ? '📧 ' + esc(u.correo) : '<span style="color:var(--amber)">sin correo</span>'}${u.empleado_nombre ? ' · Empleado: ' + esc(u.empleado_nombre) : ''}</span></td>
+        <td class="hora">${esc(u.usuario)}${u.bloqueado ? '<span class="sub-celda" style="margin-left:0;color:var(--red)">bloqueado por intentos</span>' : ''}</td>
         <td>${u.rol === 'admin' ? 'Administrador' : 'Supervisor'}</td>
         <td>${u.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
-        <td style="white-space:nowrap;">${u.id === yo.id ? '<span style="font-size:12px;color:var(--muted)">(tú)</span>' :
-          `<button class="accion-link" onclick="alternarUsuario(${u.id})">${u.activo ? 'Desactivar' : 'Activar'}</button><button class="accion-link" onclick="restablecer(${u.id}, '${esc(u.usuario)}')">Nueva contraseña</button>`}</td>
+        <td style="white-space:nowrap;"><button class="accion-link" onclick="editarUsuario(${u.id})">Editar</button>${u.id === yo.id ? '' :
+          `<button class="accion-link" onclick="restablecer(${u.id})">Contraseña</button><button class="accion-link" onclick="alternarUsuario(${u.id})">${u.activo ? 'Desactivar' : 'Activar'}</button><button class="accion-link rojo" onclick="eliminarUsuario(${u.id})">Eliminar</button>`}</td>
       </tr>`).join('')}</tbody></table>`;
+    cargarCuenta();
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -175,11 +192,68 @@ async function elegirTema(tema) {
 async function alternarUsuario(id) {
   try { await api(`/configuracion/usuarios/${id}/toggle`, { method: 'PATCH' }); cargar(); } catch (e) { toast(e.message, 'error'); }
 }
-async function restablecer(id, usuario) {
-  const p = prompt(`Nueva contraseña para "${usuario}" (mínimo 6 caracteres):`);
-  if (!p) return;
-  try { await api(`/configuracion/usuarios/${id}/password`, { method: 'POST', body: { password: p } }); toast('Contraseña restablecida.'); } catch (e) { toast(e.message, 'error'); }
+let usuarios = [], editandoUsuario = null;
+async function restablecer(id) {
+  const u = usuarios.find((x) => x.id === id);
+  const p = await preguntar(`Contraseña de ${u.nombre}`, `Escribe la contraseña nueva para <b>${esc(u.usuario)}</b> (mínimo 6 caracteres) y compártesela. También se le quita el bloqueo por intentos fallidos.`,
+    { boton: 'Guardar contraseña', campo: { label: 'Contraseña nueva', html: '<input name="valor" type="text" class="select-input" minlength="6" autocomplete="off">' } });
+  if (p === null) return;
+  try { await api(`/configuracion/usuarios/${id}/password`, { method: 'POST', body: { password: p } }); toast('Contraseña cambiada.'); cargar(); } catch (e) { toast(e.message, 'error'); }
 }
+function editarUsuario(id) {
+  const u = usuarios.find((x) => x.id === id);
+  const f = document.getElementById('formUsuario').elements;
+  editandoUsuario = id;
+  f.nombre.value = u.nombre; f.usuario.value = u.usuario; f.correo.value = u.correo || ''; f.rol.value = u.rol;
+  f.empleado_id.value = u.empleado_id || '';
+  document.getElementById('campoEmpSup').style.display = u.rol === 'supervisor' ? 'block' : 'none';
+  document.getElementById('campoPassNuevo').style.display = 'none';
+  document.getElementById('tituloUsuario').textContent = `Editar usuario: ${u.usuario}`;
+  document.getElementById('btnUsuario').textContent = 'Guardar cambios';
+  document.getElementById('btnCancelarUsuario').classList.remove('paso-oculto');
+  document.getElementById('formUsuario').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function cancelarUsuario() {
+  editandoUsuario = null;
+  const form = document.getElementById('formUsuario');
+  form.reset();
+  document.getElementById('campoEmpSup').style.display = 'none';
+  document.getElementById('campoPassNuevo').style.display = '';
+  document.getElementById('tituloUsuario').textContent = 'Nuevo usuario';
+  document.getElementById('btnUsuario').textContent = '+ Crear usuario';
+  document.getElementById('btnCancelarUsuario').classList.add('paso-oculto');
+}
+async function eliminarUsuario(id) {
+  const u = usuarios.find((x) => x.id === id);
+  const ok = await preguntar(`Eliminar a ${u.nombre}`, `El usuario <b>${esc(u.usuario)}</b> ya no podrá entrar al panel. Lo que hizo (checadas manuales, pagos, cortes) se conserva en Auditoría. Esto no se puede deshacer.`, { boton: 'Eliminar usuario', peligro: true });
+  if (!ok) return;
+  try { await api(`/configuracion/usuarios/${id}`, { method: 'DELETE' }); toast('Usuario eliminado.'); if (editandoUsuario === id) cancelarUsuario(); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+// ---------- Mi cuenta ----------
+async function cargarCuenta() {
+  try {
+    const c = await api('/auth/mi-cuenta');
+    document.getElementById('formCuenta').elements.correo.value = c.correo || '';
+    document.getElementById('estadoCodigo').innerHTML = c.tiene_codigo
+      ? `✓ Tienes un código de recuperación (creado el ${fechaCorta(String(c.codigo_recuperacion_en).slice(0, 10))}). Si lo perdiste, genera otro: el anterior deja de servir.`
+      : '<span style="color:var(--amber)">No tienes código de recuperación.</span> Genéralo y guárdalo: sirve para recuperar tu contraseña aunque no haya correo configurado.';
+  } catch (_) {}
+}
+document.getElementById('formCuenta').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try { await api('/auth/mi-cuenta', { method: 'PUT', body: { correo: ev.target.elements.correo.value.trim() } }); toast('Correo guardado.'); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+});
+document.getElementById('btnCodigo').onclick = async () => {
+  const ok = await preguntar('Código de recuperación', 'Se va a generar un código nuevo y el anterior dejará de servir. Lo verás <b>una sola vez</b>: anótalo o tómale foto y guárdalo en un lugar seguro.', { boton: 'Generar código' });
+  if (!ok) return;
+  try {
+    const r = await api('/auth/codigo-recuperacion', { method: 'POST' });
+    await preguntar('Guarda este código', `<span style="display:block;font-family:var(--font-mono);font-size:24px;letter-spacing:.12em;color:var(--neon);text-align:center;margin:8px 0 14px;">${esc(r.codigo)}</span>
+      Con tu usuario y este código puedes crear una contraseña nueva en <b>"¿Olvidaste tu contraseña?" → Con código de recuperación</b>. Sirve una sola vez.`, { boton: 'Ya lo guardé' });
+    cargarCuenta();
+  } catch (e) { toast(e.message, 'error'); }
+};
 
 document.getElementById('formGeneral').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -224,14 +298,21 @@ document.getElementById('formPass').addEventListener('submit', async (ev) => {
     ev.target.reset(); toast('Contraseña actualizada.');
   } catch (e) { toast(e.message, 'error'); }
 });
+document.getElementById('btnCancelarUsuario').onclick = cancelarUsuario;
 document.getElementById('selRol').onchange = (e) => { document.getElementById('campoEmpSup').style.display = e.target.value === 'supervisor' ? 'block' : 'none'; };
 document.getElementById('formUsuario').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const f = ev.target.elements;
   try {
-    await api('/configuracion/usuarios', { method: 'POST', body: { nombre: f.nombre.value, usuario: f.usuario.value, password: f.password.value, rol: f.rol.value, empleado_id: f.empleado_id.value || null } });
-    ev.target.reset(); document.getElementById('campoEmpSup').style.display = 'none';
-    toast('Usuario creado.'); cargar();
+    const body = { nombre: f.nombre.value, usuario: f.usuario.value.trim(), correo: f.correo.value.trim(), rol: f.rol.value, empleado_id: f.empleado_id.value || null };
+    if (editandoUsuario) {
+      const r = await api(`/configuracion/usuarios/${editandoUsuario}`, { method: 'PUT', body });
+      toast(r.yo ? 'Tus datos se guardaron. Si cambiaste tu usuario o rol, vuelve a iniciar sesión.' : 'Usuario actualizado.');
+    } else {
+      await api('/configuracion/usuarios', { method: 'POST', body: { ...body, password: f.password.value } });
+      toast('Usuario creado.');
+    }
+    cancelarUsuario(); cargar();
   } catch (e) { toast(e.message, 'error'); }
 });
 document.getElementById('selProv').onchange = (e) => {
