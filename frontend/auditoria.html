@@ -26,7 +26,7 @@
 <script src="js/api.js"></script>
 <script>
 iniciarPanel({ soloAdmin: true });
-const ETQ = { creada: 'Creada', editada: 'Editada', eliminada: 'Eliminada' };
+const ETQ = { creada: 'Creada', editada: 'Editada', eliminada: 'Eliminada', aprobada: 'Rostro confirmado' };
 api('/checadas/auditoria').then((rs) => {
   const t = document.getElementById('tabla');
   if (!rs.length) { t.innerHTML = '<div class="empty-state">Todavía no hay cambios manuales registrados. Esto es buena señal.</div>'; return; }

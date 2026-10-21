@@ -10,7 +10,10 @@ router.use(verificarToken);
 
 const COLUMNAS = `e.id, e.nombre, e.puesto, e.departamento, e.sucursal, e.foto_url, e.numero_empleado,
   e.huella_id, e.horario_id, e.jefe_directo_id, e.fecha_ingreso, e.activo, e.creado_en, e.sueldo_diario, e.permisos,
-  (e.pin_hash IS NOT NULL) AS tiene_pin`;
+  (e.pin_hash IS NOT NULL) AS tiene_pin,
+  (e.foto_url IS NOT NULL AND e.descriptor_foto = e.foto_url AND e.descriptor_facial IS NULL) AS foto_sin_rostro,
+  (SELECT json_build_object('id', d.id, 'descripcion', d.descripcion, 'creado_en', d.creado_en, 'ultimo_uso', d.ultimo_uso)
+     FROM dispositivos d WHERE d.empleado_id = e.id AND d.activo) AS celular`;
 
 // Lista completa (admin) — o solo su equipo directo (supervisor)
 router.get('/', async (req, res, next) => {
@@ -103,6 +106,12 @@ router.put('/:id', requiereAdmin, async (req, res, next) => {
     if (req.body.quitar_pin) sets.push('pin_hash=NULL');
     valores.push(id);
     await pool.query(`UPDATE empleados SET ${sets.join(', ')} WHERE id=$${valores.length}`, valores);
+    if (req.body.foto) {
+      // Foto nueva: las checadas que no se pudieron comparar por la foto anterior se vuelven a revisar
+      await pool.query(
+        `UPDATE checadas SET revision = 'pendiente', revision_motivo = NULL WHERE empleado_id = $1 AND revision = 'revisar'
+         AND revision_motivo IN ('Sin foto en el expediente para comparar', 'La foto del expediente no muestra bien el rostro')`, [id]);
+    }
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -110,6 +119,14 @@ router.put('/:id', requiereAdmin, async (req, res, next) => {
 router.patch('/:id/toggle', requiereAdmin, async (req, res, next) => {
   try {
     await pool.query('UPDATE empleados SET activo = NOT activo WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Liberar el celular registrado (el empleado podrá registrar otro al checar)
+router.delete('/:id/dispositivo', requiereAdmin, async (req, res, next) => {
+  try {
+    await pool.query('UPDATE dispositivos SET activo = FALSE WHERE empleado_id = $1 AND activo', [req.params.id]);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

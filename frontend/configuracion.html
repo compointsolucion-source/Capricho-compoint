@@ -29,8 +29,10 @@
         <form id="formGeneral" class="panel-body">
           <div class="field"><label>Nombre de la empresa</label><input type="text" name="empresa_nombre"></div>
           <div class="field"><label>Segundos que dura cada QR en pantalla</label><input type="number" name="qr_vigencia_segundos" min="10" max="300"></div>
-          <div class="checkbox-row"><input type="checkbox" name="requiere_facial" id="reqFacial"><label for="reqFacial">Verificación facial obligatoria al checar por QR (cámara + parpadeo + comparación con la foto del empleado)</label></div>
-          <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">Si está activa: sin verificar el rostro <b>no se registra</b> la checada, quien no tenga foto en su expediente no puede checar por QR, y cada checada guarda una foto como evidencia.</p>
+          <div class="checkbox-row"><input type="checkbox" name="requiere_dispositivo" id="reqDisp"><label for="reqDisp">Cada empleado solo puede checar desde su celular registrado</label></div>
+          <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">El primer celular con el que checa queda registrado a su nombre. Si cambia o pierde el celular, libéralo en Empleados.</p>
+          <div class="checkbox-row"><input type="checkbox" name="requiere_facial" id="reqFacial"><label for="reqFacial">Selfie obligatoria al checar por QR</label></div>
+          <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">La cámara toma la foto sola en cuanto ve el rostro (2–3 segundos). Después, el panel la compara con la foto del expediente: si no coincide, la checada aparece en <b>Checadas → Por revisar</b> para que tú decidas.</p>
           <button type="submit" class="btn-primary inline">Guardar</button>
         </form>
       </div>
@@ -134,7 +136,7 @@ async function cargar() {
     pintarTemas(g.tema);
     pintarFinanzas(g);
     const fg = document.getElementById('formGeneral').elements;
-    fg.empresa_nombre.value = g.empresa_nombre; fg.qr_vigencia_segundos.value = g.qr_vigencia_segundos; fg.requiere_facial.checked = g.requiere_facial;
+    fg.empresa_nombre.value = g.empresa_nombre; fg.qr_vigencia_segundos.value = g.qr_vigencia_segundos; fg.requiere_facial.checked = g.requiere_facial; fg.requiere_dispositivo.checked = g.requiere_dispositivo !== false;
     const fs = document.getElementById('formSmtp').elements, s = conf.smtp;
     ['proveedor', 'host', 'puerto', 'usuario', 'correo_remitente', 'nombre_remitente'].forEach((k) => { fs[k].value = s[k] || ''; });
     document.getElementById('lblPassSmtp').textContent = s.tiene_contrasena ? '(ya guardada — déjala vacía para no cambiarla)' : '';
@@ -183,7 +185,7 @@ document.getElementById('formGeneral').addEventListener('submit', async (ev) => 
   ev.preventDefault();
   const f = ev.target.elements;
   try {
-    await api('/configuracion/general', { method: 'PUT', body: { ...conf.general, empresa_nombre: f.empresa_nombre.value, qr_vigencia_segundos: f.qr_vigencia_segundos.value, requiere_facial: f.requiere_facial.checked } });
+    await api('/configuracion/general', { method: 'PUT', body: { ...conf.general, empresa_nombre: f.empresa_nombre.value, qr_vigencia_segundos: f.qr_vigencia_segundos.value, requiere_facial: f.requiere_facial.checked, requiere_dispositivo: f.requiere_dispositivo.checked } });
     toast('Configuración guardada.'); cargar();
   } catch (e) { toast(e.message, 'error'); }
 });

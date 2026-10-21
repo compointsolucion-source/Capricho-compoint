@@ -47,11 +47,11 @@ router.put('/general', async (req, res, next) => {
       `UPDATE configuracion SET empresa_nombre = $1, tema = $2, qr_vigencia_segundos = $3,
          requiere_facial = $4, tolerancia_default_min = $5, dias_operacion = $6, hora_corte_dia = $7,
          comision_tarjeta = $8, bono_puntualidad = $9, bono_semana_perfecta = $10, puntualidad_tolerancia_min = $11,
-         bono_pierde_con_falta = $12, aviso_corte_correo = $13, actualizado_en = NOW() WHERE id = 1`,
+         bono_pierde_con_falta = $12, aviso_corte_correo = $13, requiere_dispositivo = $14, actualizado_en = NOW() WHERE id = 1`,
       [String(b.empresa_nombre || 'Compoint').trim() || 'Compoint', tema, segundos, !!b.requiere_facial,
        Math.max(Number(b.tolerancia_default_min) || 10, 0), (diasOp.length ? DIAS.filter((d) => diasOp.includes(d)) : ['X', 'J', 'V', 'S', 'D']).join(','),
        Math.round(num(b.hora_corte_dia, 6, 0, 12)), num(b.comision_tarjeta, 3.5, 0, 20), num(b.bono_puntualidad, 60, 0, 100000),
-       num(b.bono_semana_perfecta, 0, 0, 100000), Math.round(num(b.puntualidad_tolerancia_min, 0, 0, 120)), !!b.bono_pierde_con_falta, correo || null]
+       num(b.bono_semana_perfecta, 0, 0, 100000), Math.round(num(b.puntualidad_tolerancia_min, 0, 0, 120)), !!b.bono_pierde_con_falta, correo || null, b.requiere_dispositivo !== false]
     );
     res.json({ ok: true });
   } catch (e) { next(e); }

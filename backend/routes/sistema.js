@@ -23,7 +23,7 @@ router.use(verificarToken, requiereAdmin);
 
 const TABLAS = ['configuracion', 'configuracion_smtp', 'horarios', 'empleados', 'administradores', 'checadas',
   'qr_tokens', 'dias_festivos', 'incidencias', 'auditoria_checadas', 'archivos',
-  'conceptos_gasto', 'cortes', 'gastos', 'bonos_extra', 'nomina_pagos', 'auditoria_finanzas'];
+  'conceptos_gasto', 'cortes', 'gastos', 'bonos_extra', 'nomina_pagos', 'auditoria_finanzas', 'dispositivos'];
 
 function literal(v) {
   if (v === null || v === undefined) return 'NULL';
@@ -100,7 +100,7 @@ router.post('/reinicio', async (req, res, next) => {
       mensaje = 'Se borró todo el historial (checadas, incidencias, cortes, gastos, nómina pagada y auditorías). Empleados, horarios, proveedores y usuarios se conservaron.';
     } else {
       await c.query('UPDATE administradores SET empleado_id = NULL');
-      await c.query('DELETE FROM gastos; DELETE FROM cortes; DELETE FROM auditoria_finanzas; DELETE FROM empleados; DELETE FROM horarios; DELETE FROM dias_festivos; DELETE FROM qr_tokens; DELETE FROM archivos;');
+      await c.query('DELETE FROM gastos; DELETE FROM cortes; DELETE FROM auditoria_finanzas; DELETE FROM empleados; DELETE FROM horarios; DELETE FROM dias_festivos; DELETE FROM qr_tokens; DELETE FROM archivos; DELETE FROM dispositivos;');
       mensaje = 'Se borraron empleados, horarios, días festivos e historial completo. Los usuarios y la configuración se conservaron.';
       if (nivel === 'fabrica') {
         await c.query('DELETE FROM administradores WHERE id <> $1', [req.usuario.id]);

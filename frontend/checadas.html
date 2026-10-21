@@ -11,12 +11,33 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
 <title>Checadas — Capricho-compoint</title>
+<style>
+  .rev-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .rev-card { background: var(--bg-panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .rev-fotos { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .rev-fotos img, .rev-fotos .vacia { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-panel); }
+  .rev-fotos .vacia { display:flex; align-items:center; justify-content:center; font-size: 12px; color: var(--muted); text-align:center; padding: 8px; }
+  .rev-fotos .lbl { font-size: 10.5px; text-transform: uppercase; color: var(--muted); letter-spacing: .08em; margin-top: 4px; text-align: center; }
+  .rev-nombre { font-weight: 700; font-size: 15px; }
+  .rev-det { font-size: 12.5px; color: var(--muted); margin: 3px 0 6px; font-family: var(--font-mono); }
+  .rev-motivo { font-size: 12.5px; color: var(--amber); margin-bottom: 12px; }
+  .rev-botones { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rev-botones button { padding: 10px 8px; font-size: 13px; }
+</style>
 </head>
 <body>
 <div class="app-shell">
   <aside id="sidebar"></aside>
   <main class="main">
     <div class="topbar"><h1>Checadas</h1></div>
+    <div class="panel paso-oculto" id="revisar" style="margin-bottom:20px;border-color:rgba(247,198,93,.5);">
+      <div class="panel-head"><h2>⚠ Checadas por revisar</h2><span id="notaRevisar" style="font-size:12px;color:var(--muted);"></span></div>
+      <div class="panel-body">
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px;">La selfie de estas checadas no se pudo confirmar contra la foto del expediente. Compara las dos fotos y decide. Si eliminas la checada, ya no cuenta para la asistencia ni la nómina (queda en Auditoría).</p>
+        <div class="rev-grid" id="listaRevisar"></div>
+      </div>
+    </div>
+    <div id="notaVerificando" style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;"></div>
     <div class="panel form-panel">
       <div class="panel-head"><h2 id="tituloForm">Agregar checada manual</h2></div>
       <form id="form" class="panel-body">
@@ -45,8 +66,10 @@
 </div>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/verificador.js"></script>
 <script>
 iniciarPanel({ soloAdmin: true });
+iniciarVerificador(15);
 const form = document.getElementById('form');
 const fechaVer = document.getElementById('fechaVer');
 fechaVer.value = hoyMx();
@@ -70,7 +93,7 @@ async function cargar() {
         <td class="hora">${hhmmss(c.hora)}</td>
         <td>${esc(c.nombre)}</td>
         <td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
-        <td class="${c.metodo === 'manual' ? 'metodo-manual' : ''}" style="text-transform:capitalize;font-size:12.5px;">${esc(c.metodo)}${c.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
+        <td class="${c.metodo === 'manual' ? 'metodo-manual' : ''}" style="text-transform:capitalize;font-size:12.5px;">${esc(c.metodo)}${insigniaRostro(c)}</td>
         <td style="white-space:nowrap;">${c.foto_url ? `<a href="${esc(urlArchivo(c.foto_url))}" target="_blank" title="Foto al checar"><img class="avatar-thumb" style="width:40px;height:40px;" src="${esc(urlArchivo(c.foto_url))}" alt=""></a>${c.foto_ref ? `<a href="${esc(urlArchivo(c.foto_ref))}" target="_blank" title="Foto del expediente"><img class="avatar-thumb" style="width:40px;height:40px;opacity:.75;" src="${esc(urlArchivo(c.foto_ref))}" alt=""></a>` : ''}` : '—'}</td>
         <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${c.id})">Editar</button>
           <button class="accion-link rojo" onclick="eliminar(${c.id})">Eliminar</button></td>
@@ -117,6 +140,53 @@ form.addEventListener('submit', async (ev) => {
 document.getElementById('btnCancelar').onclick = cancelar;
 fechaVer.onchange = cargar;
 cargar();
+
+// ---------- Por revisar ----------
+let porRevisar = [];
+function parecido(d) {
+  if (d === null || d === undefined) return '';
+  return Number(d) < 0.6 ? 'Parecido: coincide' : Number(d) < 0.7 ? 'Parecido: dudoso' : 'Parecido: no se parece';
+}
+async function cargarRevisar() {
+  try {
+    const [d, n] = await Promise.all([api('/revision'), api('/revision/conteo')]);
+    porRevisar = d.checadas;
+    document.getElementById('notaVerificando').textContent = n.pendientes
+      ? `Comparando ${n.pendientes} foto(s) de checadas con el expediente… (se hace solo mientras el panel o la pantalla QR están abiertos)` : '';
+    const panel = document.getElementById('revisar');
+    panel.classList.toggle('paso-oculto', !porRevisar.length);
+    document.getElementById('notaRevisar').textContent = porRevisar.length ? `${porRevisar.length} pendiente(s)` : '';
+    document.getElementById('listaRevisar').innerHTML = porRevisar.map((c) => `
+      <div class="rev-card">
+        <div class="rev-fotos">
+          <div>${c.foto_url ? `<a href="${esc(urlArchivo(c.foto_url))}" target="_blank"><img src="${esc(urlArchivo(c.foto_url))}" alt=""></a>` : '<div class="vacia">Sin foto</div>'}<div class="lbl">Al checar</div></div>
+          <div>${c.foto_ref ? `<a href="${esc(urlArchivo(c.foto_ref))}" target="_blank"><img src="${esc(urlArchivo(c.foto_ref))}" alt=""></a>` : '<div class="vacia">Sin foto en el expediente</div>'}<div class="lbl">Expediente</div></div>
+        </div>
+        <div class="rev-nombre">${esc(c.nombre)}</div>
+        <div class="rev-det">${fechaCorta(c.fecha)} · ${hhmmss(c.hora).slice(0, 5)} · ${c.tipo === 'entrada' ? 'Entrada' : 'Salida'}</div>
+        <div class="rev-motivo">${esc(c.revision_motivo || 'No se pudo confirmar el rostro')}${c.distancia_facial !== null ? ' · ' + parecido(c.distancia_facial) : ''}</div>
+        <div class="rev-botones">
+          <button class="btn-primary" onclick="aprobar(${c.id})">✓ Sí es ${esc(String(c.nombre).split(' ')[0])}</button>
+          <button class="btn-secondary" style="color:var(--red);" onclick="rechazar(${c.id})">✕ No es, eliminar</button>
+        </div>
+      </div>`).join('');
+    if (location.hash === '#revisar' && porRevisar.length && !cargarRevisar.yaBajo) { cargarRevisar.yaBajo = true; panel.scrollIntoView({ behavior: 'smooth' }); }
+  } catch (e) { /* sin permisos o sin conexión: no se muestra */ }
+}
+async function aprobar(id) {
+  try { await api(`/revision/${id}/aprobar`, { method: 'POST' }); toast('Checada confirmada.'); cargarRevisar(); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+async function rechazar(id) {
+  const c = porRevisar.find((x) => x.id === id);
+  if (!confirm(`¿Eliminar la ${c.tipo} de ${c.nombre} del ${fechaCorta(c.fecha)} a las ${hhmmss(c.hora).slice(0, 5)}? Ya no contará para su asistencia ni su nómina. Queda registrado en Auditoría.`)) return;
+  try { await api(`/checadas/${id}`, { method: 'DELETE' }); toast('Checada eliminada.'); cargarRevisar(); cargar(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+cargarRevisar();
+setInterval(cargarRevisar, 30000);
+let recarga = null;
+document.addEventListener('revision-actualizada', () => { clearTimeout(recarga); recarga = setTimeout(() => { cargarRevisar(); cargar(); }, 800); });
 </script>
 </body>
 </html>

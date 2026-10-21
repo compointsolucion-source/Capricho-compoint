@@ -18,7 +18,7 @@ router.get('/checadas', async (req, res, next) => {
     if (req.query.empleado_id) { params.push(req.query.empleado_id); filtro += ` AND e.id = $${params.length}`; }
     if (req.usuario.rol !== 'admin') { params.push(req.usuario.empleado_id || 0); filtro += ` AND e.jefe_directo_id = $${params.length}`; }
     const { rows } = await pool.query(
-      `SELECT c.fecha, c.hora, c.tipo, c.metodo, c.verificado_facial, c.foto_url, e.id AS empleado_id, e.nombre, e.puesto, e.departamento,
+      `SELECT c.fecha, c.hora, c.tipo, c.metodo, c.verificado_facial, c.revision, c.foto_url, e.id AS empleado_id, e.nombre, e.puesto, e.departamento,
               h.hora_entrada, h.hora_salida, h.tolerancia_minutos, h.tolerancia_salida_minutos, h.tipo_turno
        FROM checadas c JOIN empleados e ON e.id = c.empleado_id
        LEFT JOIN horarios h ON h.id = e.horario_id

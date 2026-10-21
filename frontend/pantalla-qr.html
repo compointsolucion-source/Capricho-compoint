@@ -29,6 +29,7 @@
 </div>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/verificador.js"></script>
 <script>
 if (!getToken()) location.href = 'login.html';
 // La URL que se abre en el celular: checar.html en esta misma página web
@@ -71,6 +72,8 @@ async function ultimas() {
 }
 ultimas();
 setInterval(ultimas, 15000);
+// Esta pantalla siempre está abierta: aquí se comparan las selfies con el expediente
+iniciarVerificador(15);
 // Mantener la pantalla encendida si el navegador lo permite
 if ('wakeLock' in navigator) {
   const pedir = () => navigator.wakeLock.request('screen').catch(() => {});

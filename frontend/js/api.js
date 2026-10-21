@@ -298,3 +298,12 @@ async function instalarApp() {
 }
 // ¿Corre dentro de la app de Android?
 function esAppAndroid() { return /CaprichoApp/.test(navigator.userAgent) || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+
+// Estado del rostro de una checada (la selfie se compara en segundo plano)
+function insigniaRostro(c) {
+  if (c.revision === 'ok' || (!c.revision && c.verificado_facial)) return '<span class="badge badge-facial">Rostro ✓</span>';
+  if (c.revision === 'aprobada') return '<span class="badge badge-facial" title="Confirmada por el administrador">Confirmada ✓</span>';
+  if (c.revision === 'pendiente') return '<span class="badge badge-salida" style="margin-left:6px;" title="Comparando con la foto del expediente">Verificando…</span>';
+  if (c.revision === 'revisar') return '<a href="checadas.html#revisar" class="badge badge-retardo" style="margin-left:6px;" title="El rostro no se pudo confirmar">⚠ Revisar</a>';
+  return '';
+}

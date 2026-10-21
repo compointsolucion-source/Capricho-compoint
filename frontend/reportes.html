@@ -86,7 +86,7 @@ async function cargar() {
         <td class="hora">${fechaCorta(r.fecha)}</td><td class="hora">${hhmmss(r.hora)}</td>
         <td>${esc(r.nombre)}<span class="sub-celda" style="margin-left:0">${esc(r.departamento || '')}</span></td>
         <td>${r.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
-        <td style="text-transform:capitalize;font-size:12.5px;" class="${r.metodo === 'manual' ? 'metodo-manual' : ''}">${esc(r.metodo)}${r.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
+        <td style="text-transform:capitalize;font-size:12.5px;" class="${r.metodo === 'manual' ? 'metodo-manual' : ''}">${esc(r.metodo)}${insigniaRostro(r)}</td>
         <td>${r.min_retardo !== null ? `<span class="badge badge-retardo">Retardo ${r.min_retardo} min</span>` : r.min_anticipada !== null ? `<span class="badge badge-retardo">Salió ${r.min_anticipada} min antes</span>` : '—'}</td>
       </tr>`).join('')}</tbody></table>` : '<div class="empty-state">No hay checadas en este periodo.</div>';
   } catch (e) { toast(e.message, 'error'); }
@@ -105,7 +105,7 @@ $('btnCsv').onclick = () => {
   if (!datos) return;
   exportarCsv(`reporte_${datos.desde}_a_${datos.hasta}.csv`,
     ['Fecha', 'Hora', 'Empleado', 'Puesto', 'Departamento', 'Tipo', 'Método', 'Verificado facial', 'Minutos de retardo', 'Minutos de salida anticipada'],
-    datos.registros.map((r) => [r.fecha, hhmmss(r.hora), r.nombre, r.puesto, r.departamento, r.tipo, r.metodo, r.verificado_facial ? 'Sí' : 'No', r.min_retardo ?? '', r.min_anticipada ?? '']));
+    datos.registros.map((r) => [r.fecha, hhmmss(r.hora), r.nombre, r.puesto, r.departamento, r.tipo, r.metodo, r.revision === 'aprobada' ? 'Confirmado por admin' : r.verificado_facial ? 'Sí' : r.revision === 'revisar' ? 'Por revisar' : r.revision === 'pendiente' ? 'Verificando' : 'No', r.min_retardo ?? '', r.min_anticipada ?? '']));
 };
 cargar();
 </script>

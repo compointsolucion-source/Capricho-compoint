@@ -21,6 +21,7 @@
       <div class="fecha" id="fecha"></div>
     </div>
     <div id="avisoFestivo"></div>
+    <div id="avisoRevisar"></div>
     <div id="finHoy"></div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="label">Empleados activos</div><div class="value" id="kTotal">—</div></div>
@@ -36,6 +37,7 @@
 </div>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/verificador.js"></script>
 <script>
 iniciarPanel();
 async function cargar() {
@@ -58,14 +60,27 @@ async function cargar() {
         <td>${esc(c.nombre)}</td>
         <td>${esc(c.puesto || '—')}</td>
         <td>${c.tipo === 'entrada' ? '<span class="badge badge-entrada">Entrada</span>' : '<span class="badge badge-salida">Salida</span>'}</td>
-        <td style="text-transform:capitalize;font-size:12.5px;" class="${c.metodo === 'manual' ? 'metodo-manual' : ''}">${esc(c.metodo)}${c.verificado_facial ? '<span class="badge badge-facial">Rostro ✓</span>' : ''}</td>
+        <td style="text-transform:capitalize;font-size:12.5px;" class="${c.metodo === 'manual' ? 'metodo-manual' : ''}">${esc(c.metodo)}${insigniaRostro(c)}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) { toast(e.message, 'error'); }
 }
 cargar();
 setInterval(cargar, 30000);
+// Checadas cuya selfie no coincidió con el expediente (las compara este mismo panel en segundo plano)
+async function avisoRevisar() {
+  try {
+    const n = await api('/revision/conteo');
+    document.getElementById('avisoRevisar').innerHTML = n.revisar ? `<a href="checadas.html#revisar" class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;margin-bottom:16px;border-color:rgba(247,198,93,.55);background:var(--amber-bg);">
+      <span><b style="color:var(--amber);">⚠ ${n.revisar} checada${n.revisar === 1 ? '' : 's'} por revisar</b> <span style="font-size:13px;color:var(--muted);">· la foto no coincidió con el expediente</span></span>
+      <span class="btn-mini" style="white-space:nowrap;">Revisar →</span></a>` : '';
+  } catch (_) {}
+}
 // Resumen de finanzas de hoy (solo administrador)
 if (esAdmin()) {
+  iniciarVerificador();
+  avisoRevisar();
+  setInterval(avisoRevisar, 30000);
+  document.addEventListener('revision-actualizada', () => { avisoRevisar(); cargar(); });
   api('/finanzas/corte').then((d) => {
     const r = d.resumen, c = d.corte;
     document.getElementById('finHoy').innerHTML = `<a href="corte.html" class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;margin-bottom:20px;flex-wrap:wrap;">

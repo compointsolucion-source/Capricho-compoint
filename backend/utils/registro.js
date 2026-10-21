@@ -4,7 +4,7 @@ const { ahora } = require('./tiempo');
 // Registra una checada (QR o huella). Si no se indica el tipo, alterna
 // según la última checada del día: entrada → salida → entrada...
 // Evita dobles checadas accidentales en menos de 60 segundos.
-async function registrarChecada({ empleadoId, metodo, tipo = null, ip = null, fotoUrl = null, verificadoFacial = false }) {
+async function registrarChecada({ empleadoId, metodo, tipo = null, ip = null, fotoUrl = null, verificadoFacial = false, revision = null, dispositivoId = null }) {
   const { fecha, hora } = ahora();
   const { rows } = await pool.query(
     `SELECT tipo, hora, creado_en FROM checadas WHERE empleado_id = $1 AND fecha = $2
@@ -17,12 +17,12 @@ async function registrarChecada({ empleadoId, metodo, tipo = null, ip = null, fo
     throw e;
   }
   const tipoFinal = tipo || (ultima && ultima.tipo === 'entrada' ? 'salida' : 'entrada');
-  await pool.query(
-    `INSERT INTO checadas (empleado_id, fecha, hora, tipo, metodo, ip_dispositivo, foto_url, verificado_facial)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [empleadoId, fecha, hora, tipoFinal, metodo, ip, fotoUrl, !!verificadoFacial]
+  const ins = await pool.query(
+    `INSERT INTO checadas (empleado_id, fecha, hora, tipo, metodo, ip_dispositivo, foto_url, verificado_facial, revision, dispositivo_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [empleadoId, fecha, hora, tipoFinal, metodo, ip, fotoUrl, !!verificadoFacial, revision, dispositivoId]
   );
-  return { tipo: tipoFinal, fecha, hora };
+  return { id: ins.rows[0].id, tipo: tipoFinal, fecha, hora };
 }
 
 module.exports = { registrarChecada };

@@ -36,7 +36,7 @@
           <div class="field"><label>Sueldo por día <span style="text-transform:none;letter-spacing:0;">(para la nómina semanal)</span></label><input type="text" name="sueldo_diario" inputmode="decimal" placeholder="$0"></div>
           <div class="field"><label id="lblPin">PIN de 4 dígitos (para checar por QR)</label><input type="text" name="pin" maxlength="4" inputmode="numeric" pattern="\d{4}" placeholder="••••" autocomplete="off"></div>
           <div class="field"><label>ID de huella <span style="text-transform:none;letter-spacing:0;">(lo asigna el lector)</span></label><input type="text" name="huella_id" placeholder="Opcional"></div>
-          <div class="field full"><label>Fotografía (obligatoria para checar con verificación facial: de frente, sin lentes oscuros ni gorra, con buena luz)</label><input type="file" id="foto" accept="image/jpeg,image/png,image/webp"></div>
+          <div class="field full"><label>Fotografía (con ella se comparan las selfies de cada checada: de frente, sin lentes oscuros ni gorra, con buena luz)</label><input type="file" id="foto" accept="image/jpeg,image/png,image/webp"></div>
         </div>
         <div class="checkbox-row"><input type="checkbox" name="activo" id="activo" checked><label for="activo">Empleado activo</label></div>
         <div class="form-actions">
@@ -56,8 +56,10 @@
 </div>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/verificador.js"></script>
 <script>
 iniciarPanel({ soloAdmin: true });
+iniciarVerificador();
 const form = document.getElementById('form');
 const panel = document.getElementById('panelForm');
 let empleados = [];
@@ -84,15 +86,17 @@ function pintar() {
   const lista = empleados.filter((e) => !q || [e.nombre, e.puesto, e.departamento, e.numero_empleado].join(' ').toLowerCase().includes(q));
   const t = document.getElementById('tabla');
   if (!empleados.length) { t.innerHTML = '<div class="empty-state">Aún no hay empleados registrados. Da de alta el primero con "+ Nuevo empleado".</div>'; return; }
-  t.innerHTML = `<table class="checadas"><thead><tr><th>Empleado</th><th>No.</th><th>Depto / Sucursal</th><th>Horario</th><th class="r">Sueldo/día</th><th>PIN</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+  t.innerHTML = `<table class="checadas"><thead><tr><th>Empleado</th><th>No.</th><th>Depto / Sucursal</th><th>Horario</th><th class="r">Sueldo/día</th><th>PIN</th><th>Celular</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
     ${lista.map((e) => `<tr>
       <td>${e.foto_url ? `<img class="avatar-thumb" src="${esc(urlArchivo(e.foto_url))}" alt="">` : `<span class="avatar-placeholder">${esc(e.nombre.charAt(0).toUpperCase())}</span>`}${esc(e.nombre)}
-        <span class="sub-celda">${esc(e.puesto || '—')}${!e.foto_url ? ' · <span style="color:var(--amber)">sin foto: no podrá checar por QR</span>' : ''}</span></td>
+        <span class="sub-celda">${esc(e.puesto || '—')}${!e.foto_url ? ' · <span style="color:var(--amber)" title="Sin foto, sus checadas quedarán por revisar">sin foto</span>' : e.foto_sin_rostro ? ' · <span style="color:var(--amber)" title="La foto no muestra bien el rostro: sube otra de frente y con buena luz">foto no sirve</span>' : ''}</span></td>
       <td class="hora">${esc(e.numero_empleado || '—')}</td>
       <td>${esc(e.departamento || '—')}${e.sucursal ? ' · ' + esc(e.sucursal) : ''}</td>
       <td>${esc(e.horario_nombre || '—')}</td>
       <td class="hora" style="text-align:right;">${Number(e.sueldo_diario) ? '$' + Number(e.sueldo_diario).toLocaleString('es-MX') : '<span style="color:var(--amber)">—</span>'}</td>
       <td>${e.tiene_pin ? '<span class="badge badge-entrada">Configurado</span>' : '<span class="badge badge-salida">Sin PIN</span>'}</td>
+      <td style="font-size:12px;white-space:nowrap;">${e.celular ? `<span title="${esc(e.celular.descripcion || '')} · registrado el ${fechaCorta(String(e.celular.creado_en).slice(0, 10))}">📱 Registrado</span><br>
+        <button class="accion-link" style="padding-left:0;" onclick="liberarCelular(${e.id})">Liberar</button>` : '<span style="color:var(--muted)">Al checar</span>'}</td>
       <td>${e.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
       <td style="white-space:nowrap;"><button class="accion-link" onclick="editar(${e.id})">Editar</button>
         <button class="accion-link" onclick="alternar(${e.id}, ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button></td>
@@ -129,6 +133,13 @@ async function alternar(id, activo) {
   if (!confirm(`¿${activo ? 'Desactivar' : 'Activar'} a este empleado?`)) return;
   try { await api(`/empleados/${id}/toggle`, { method: 'PATCH' }); toast('Estado actualizado'); cargar(); }
   catch (e) { toast(e.message, 'error'); }
+}
+
+async function liberarCelular(id) {
+  const e = empleados.find((x) => x.id === id);
+  if (!confirm(`¿Liberar el celular de ${e.nombre}? El siguiente celular con el que cheque quedará registrado como suyo (úsalo si cambió de celular o lo perdió).`)) return;
+  try { await api(`/empleados/${id}/dispositivo`, { method: 'DELETE' }); toast('Celular liberado.'); cargar(); }
+  catch (er) { toast(er.message, 'error'); }
 }
 
 form.addEventListener('submit', async (ev) => {

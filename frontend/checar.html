@@ -21,6 +21,10 @@
   .racha .a_tiempo { background: var(--neon-bg); color: var(--neon); border-color: rgba(93,247,106,.4); }
   .racha .retardo { background: var(--amber-bg); color: var(--amber); border-color: rgba(247,198,93,.4); }
   .racha .falta { background: var(--red-bg); color: var(--red); border-color: rgba(247,106,106,.4); }
+  .celular-nuevo { margin-top: 12px; border-radius: 12px; padding: 12px; background: var(--neon-bg); border: 1px solid rgba(93,247,106,.4); font-size: 13px; text-align:center; }
+  .btn-foto { margin-top: 4px; }
+  .camara-box.flash::after { content:''; position:absolute; inset:0; background:#fff; animation: flash .35s ease-out forwards; }
+  @keyframes flash { from { opacity:.9; } to { opacity:0; } }
   .res-tarde { background: var(--amber-bg); border: 1px solid rgba(247,198,93,.4); color: var(--amber); border-radius: 12px; padding: 12px; text-align:center; font-size: 13.5px; margin-top: 12px; }
 </style>
 <title>Registrar checada — Capricho-compoint</title>
@@ -47,10 +51,11 @@
     </div>
 
     <div id="pasoFacial" class="paso-oculto">
-      <h2>Verificando que seas tú</h2>
+      <h2>Foto de tu checada</h2>
       <p class="sub" id="nombreEmpleado"></p>
       <div class="camara-box" id="camaraBox"><video id="video" autoplay muted playsinline></video></div>
-      <div class="estado-facial" id="estadoFacial">Cargando cámara...</div>
+      <div class="estado-facial" id="estadoFacial">Abriendo cámara...</div>
+      <button type="button" class="btn-primary btn-foto paso-oculto" id="btnFoto">📸 Tomar foto</button>
     </div>
 
     <div id="pasoResultado" class="paso-oculto"></div>
@@ -63,14 +68,25 @@ const token = new URLSearchParams(location.search).get('t') || '';
 const pinInput = document.getElementById('pin');
 const btn = document.getElementById('btnValidarPin');
 const resultadoPin = document.getElementById('resultadoPin');
-const MAX_INTENTOS = 3;
 let empleadoActual = null;
 let stream = null;
-let requiereFacial = false;
-let precarga = null;      // promesa: librería + modelos de reconocimiento facial
-let descriptorRef = null; // rasgos de la foto del expediente (se calculan una vez)
-let intentosFaciales = 0;
-let sesion = null;        // la da el servidor al validar el PIN (4 minutos para terminar)
+let detector = null;  // promesa: detector de rostro ligero (≈850 KB la primera vez, luego queda guardado)
+let sesion = null;    // la da el servidor al validar el PIN (4 minutos para terminar)
+let enviando = false;
+
+// Código propio de este celular (se registra a nombre del empleado la primera vez)
+function codigoCelular() {
+  let c = null;
+  try { c = localStorage.getItem('capricho_celular'); } catch (_) {}
+  if (!c || !/^[a-f0-9]{64}$/.test(c)) {
+    const a = new Uint8Array(32);
+    crypto.getRandomValues(a);
+    c = Array.from(a, (x) => x.toString(16).padStart(2, '0')).join('');
+    try { localStorage.setItem('capricho_celular', c); } catch (_) {}
+  }
+  return c;
+}
+const celular = codigoCelular();
 
 // Botones para volver a escanear: dentro de la app abre el escáner;
 // en el navegador también se puede escanear desde aquí con la cámara.
@@ -97,26 +113,26 @@ async function post(ruta, body) {
 function cargarScript(src) {
   return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = mal; document.head.appendChild(s); });
 }
-function cargarFaceApi() {
-  return (async () => {
-    if (!window.faceapi) await cargarScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
-    const MODELOS = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
-    await faceapi.nets.tinyFaceDetector.loadFromUri(MODELOS);
-    await faceapi.nets.faceLandmark68Net.loadFromUri(MODELOS);
-    await faceapi.nets.faceRecognitionNet.loadFromUri(MODELOS);
-  })();
+// Solo el detector ligero: sirve para tomar la foto en cuanto se ve un rostro.
+// La comparación con el expediente se hace después en el panel, sin hacerte esperar.
+function cargarDetector() {
+  if (!detector) {
+    detector = (async () => {
+      if (!window.faceapi) await cargarScript('js/vendor/face-api.min.js');
+      await faceapi.nets.tinyFaceDetector.loadFromUri('modelos');
+    })();
+    detector.catch(() => { detector = null; });
+  }
+  return detector;
 }
 
 (async function inicio() {
   try {
     const r = await fetch(`${API_URL}/qr/valido/${encodeURIComponent(token)}`).then((x) => x.json());
     if (!r.valido) return mostrar('pasoExpirado');
-    requiereFacial = !!r.requiere_facial;
-    if (requiereFacial) {
-      // Se descarga mientras el empleado escribe su PIN, para que la cámara abra rápido
-      precarga = cargarFaceApi();
-      precarga.catch(() => {});
-      document.querySelector('#pasoPin .sub').textContent = '4 dígitos que te asignó RH · después se abrirá la cámara para verificar que eres tú';
+    if (r.requiere_facial) {
+      cargarDetector(); // se descarga mientras escribes tu PIN
+      document.querySelector('#pasoPin .sub').textContent = '4 dígitos que te asignó RH · después se tomará una foto rápida de tu rostro';
     }
     mostrar('pasoPin');
     pinInput.focus();
@@ -127,7 +143,7 @@ function cargarFaceApi() {
 
 pinInput.addEventListener('input', () => {
   pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
-  if (pinInput.value.length === 4) btn.focus();
+  if (pinInput.value.length === 4 && !btn.disabled) btn.click(); // al 4º dígito sigue solo
 });
 pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
 
@@ -135,22 +151,24 @@ btn.addEventListener('click', async () => {
   const pin = pinInput.value;
   if (pin.length !== 4) { resultadoPin.innerHTML = '<div class="resultado error">Ingresa los 4 dígitos de tu PIN.</div>'; return; }
   btn.disabled = true; btn.textContent = 'Verificando...';
+  resultadoPin.innerHTML = '';
   try {
-    const data = await post('/qr/pin', { token, pin });
+    const data = await post('/qr/pin', { token, pin, dispositivo: celular });
     if (!data.ok) {
       if (data.expirado) { mostrar('pasoExpirado'); return; }
       resultadoPin.innerHTML = `<div class="resultado error">${esc(data.error)}</div>`;
       btn.disabled = false; btn.textContent = 'Continuar';
+      pinInput.value = ''; pinInput.focus();
       return;
     }
     empleadoActual = data;
     sesion = data.sesion || null;
     if (data.requiere_facial) {
       mostrar('pasoFacial');
-      document.getElementById('nombreEmpleado').innerHTML = `<img class="foto-ref" src="${esc(urlArchivo(data.foto_url))}"> ${esc(data.nombre)}`;
-      iniciarVerificacionFacial();
+      document.getElementById('nombreEmpleado').textContent = data.nombre;
+      tomarSelfie();
     } else {
-      registrarChecada(false, null);
+      registrarChecada(null);
     }
   } catch (e) {
     resultadoPin.innerHTML = '<div class="resultado error">Error de conexión. Intenta de nuevo.</div>';
@@ -158,13 +176,16 @@ btn.addEventListener('click', async () => {
   }
 });
 
-async function registrarChecada(verificadoFacial, foto) {
+async function registrarChecada(foto) {
+  if (enviando) return;
+  enviando = true;
   try {
-    const data = await post('/qr/checar', { token, sesion, pin: pinInput.value, verificado_facial: verificadoFacial, foto });
+    const data = await post('/qr/checar', { token, sesion, pin: pinInput.value, foto, dispositivo: celular });
     mostrarResultadoFinal(data);
   } catch (e) {
     mostrarResultadoFinal({ ok: false, error: 'Error de conexión al registrar la checada.' });
   }
+  enviando = false;
 }
 
 function apagarCamara() {
@@ -189,8 +210,10 @@ function mostrarResultadoFinal(data) {
             <div class="d">Llevas <b style="color:var(--white)">$${Number(p.bono_semana || 0).toLocaleString('es-MX')}</b> de bono esta semana</div>${racha}</div>`
         : `<div class="res-tarde">Llegaste <b>${p.min_tarde} min tarde</b> (tu entrada es a las ${String(p.hora_entrada).slice(0, 5)}). Hoy no aplica el bono de puntualidad.${racha}</div>`;
     }
-    c.innerHTML = `<div class="resultado ok">${titulo}${data.verificado_facial ? ' · rostro verificado ✓' : ''}<br><strong style="font-size:18px;">${esc(data.empleado)}</strong><div class="hora">${esc(data.hora)}</div></div>
-      ${extra}
+    const nuevo = empleadoActual && empleadoActual.celular_nuevo
+      ? '<div class="celular-nuevo">📱 Este celular quedó registrado como tuyo. Desde ahora checa siempre con él.</div>' : '';
+    c.innerHTML = `<div class="resultado ok">${titulo}${data.foto_guardada ? ' · foto guardada ✓' : ''}<br><strong style="font-size:18px;">${esc(data.empleado)}</strong><div class="hora">${esc(data.hora)}</div></div>
+      ${extra}${nuevo}
       <p class="sub" style="margin-top:18px;">${saludo} ${esAppAndroid() ? '' : 'Ya puedes cerrar esta página.'}</p>
       ${esAppAndroid() ? '<a href="app.html" class="btn-primary" style="display:block;text-align:center;">Listo</a>' : ''}`;
   } else {
@@ -199,110 +222,68 @@ function mostrarResultadoFinal(data) {
   }
 }
 
-// Falla de verificación facial: NUNCA se registra la checada sin verificar.
-// Se permiten hasta 3 intentos; después hay que pedir a RH una checada manual.
-function fallaFacial(mensaje) {
+function errorCamara(mensaje) {
   apagarCamara();
-  intentosFaciales++;
   mostrar('pasoResultado');
-  const c = document.getElementById('pasoResultado');
-  const quedan = MAX_INTENTOS - intentosFaciales;
-  if (quedan > 0) {
-    c.innerHTML = `<div class="resultado error">${esc(mensaje)}</div>
-      <p class="sub" style="margin-top:16px;">La checada <b>no</b> se registró. Te quedan ${quedan} intento(s).</p>
-      <button class="btn-primary" id="btnReintentar">Intentar de nuevo</button>`;
-    document.getElementById('btnReintentar').onclick = () => { mostrar('pasoFacial'); iniciarVerificacionFacial(); };
-  } else {
-    c.innerHTML = `<div class="resultado error">${esc(mensaje)}</div>
-      <p class="sub" style="margin-top:16px;">La checada <b>no</b> se registró. Puedes volver a escanear el QR o pedir a tu encargado que registre tu entrada.</p>
-      ${botonesReintento()}`;
-  }
+  document.getElementById('pasoResultado').innerHTML = `<div class="resultado error">${esc(mensaje)}</div>
+    <p class="sub" style="margin-top:16px;">La checada <b>no</b> se registró.</p>
+    <button class="btn-primary" id="btnReintentar">Intentar de nuevo</button>${botonesReintento()}`;
+  document.getElementById('btnReintentar').onclick = () => { mostrar('pasoFacial'); tomarSelfie(); };
 }
 
-// ---------- Verificación facial: cámara + parpadeo + comparación con la foto ----------
-async function iniciarVerificacionFacial() {
+// ---------- Selfie rápida: se toma sola en cuanto se ve tu rostro ----------
+async function tomarSelfie() {
   const estado = document.getElementById('estadoFacial');
   const caja = document.getElementById('camaraBox');
   const video = document.getElementById('video');
-  caja.classList.remove('ok', 'buscando');
+  const btnFoto = document.getElementById('btnFoto');
+  let tomada = false;
+  caja.classList.remove('ok', 'flash');
+  btnFoto.classList.add('paso-oculto');
 
-  estado.textContent = 'Activando cámara...';
+  estado.textContent = 'Abriendo cámara...';
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
     video.srcObject = stream;
-    await new Promise((r) => { video.onloadedmetadata = r; });
+    await new Promise((r) => { if (video.readyState >= 1) r(); else video.onloadedmetadata = r; });
     await video.play().catch(() => {});
   } catch (e) {
-    return fallaFacial('No se pudo abrir la cámara. Dale permiso a la cámara en tu navegador (ícono del candado junto a la dirección) e inténtalo de nuevo.');
+    return errorCamara('No se pudo abrir la cámara. Dale permiso a la cámara (en la app: Ajustes → Apps → Capricho → Permisos; en el navegador: el ícono del candado junto a la dirección).');
   }
 
-  estado.textContent = 'Preparando reconocimiento facial...';
-  try {
-    if (!precarga) precarga = cargarFaceApi();
-    await precarga;
-  } catch (e) {
-    precarga = null;
-    return fallaFacial('No se pudo cargar el reconocimiento facial. Revisa tu señal de internet e intenta de nuevo.');
-  }
-
-  if (!descriptorRef) {
-    estado.textContent = 'Leyendo tu foto registrada...';
-    try {
-      const img = await faceapi.fetchImage(urlArchivo(empleadoActual.foto_url));
-      const ref = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-      descriptorRef = ref ? ref.descriptor : null;
-    } catch (_) { descriptorRef = null; }
-    if (!descriptorRef) {
-      intentosFaciales = MAX_INTENTOS - 1;
-      return fallaFacial('Tu foto registrada no sirve para verificar tu rostro. Pide a RH que te tome una foto nueva, de frente y con buena luz.');
-    }
-  }
-
-  estado.textContent = 'Mira a la cámara y parpadea...';
-  caja.classList.add('buscando');
-  let ojosAbiertosPrevio = true, ciclos = 0, ocupado = false;
-  const ear = (p) => {
-    const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-    return (d(p[1], p[5]) + d(p[2], p[4])) / (2 * d(p[0], p[3]));
+  const capturar = () => {
+    if (tomada || !stream) return;
+    tomada = true;
+    const canvas = document.createElement('canvas');
+    const escala = Math.min(1, 480 / (video.videoWidth || 480));
+    canvas.width = Math.round((video.videoWidth || 480) * escala); canvas.height = Math.round((video.videoHeight || 360) * escala);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const foto = canvas.toDataURL('image/jpeg', 0.8);
+    caja.classList.add('ok', 'flash');
+    btnFoto.classList.add('paso-oculto');
+    estado.textContent = 'Registrando tu checada...';
+    if (navigator.vibrate) navigator.vibrate(40);
+    registrarChecada(foto);
   };
-  const intervalo = setInterval(async () => {
-    if (ocupado) return;
-    ocupado = true;
+  btnFoto.onclick = capturar;
+  estado.textContent = 'Mira a la cámara...';
+  // Si en 2.5 s no se tomó sola (poca luz, detector sin descargar), aparece el botón
+  setTimeout(() => { if (!tomada) { btnFoto.classList.remove('paso-oculto'); estado.textContent = 'Mira a la cámara y toca "Tomar foto"'; } }, 2500);
+
+  // Esperar unos milisegundos a que la cámara ajuste la luz
+  await new Promise((r) => setTimeout(r, 350));
+  try { await Promise.race([cargarDetector(), new Promise((_, mal) => setTimeout(mal, 6000))]); } catch (_) { return; } // sin detector: queda el botón
+  const opciones = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 });
+  let vistos = 0;
+  while (!tomada && stream) {
     try {
-      ciclos++;
-      if (ciclos > 150) { // ~30 segundos
-        clearInterval(intervalo);
-        return fallaFacial('No se detectó tu parpadeo. Ponte de frente, con buena luz, y parpadea despacio.');
-      }
-      const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
-      if (!det) { estado.textContent = 'No veo tu rostro: acércate y ponte de frente.'; return; }
-      estado.textContent = 'Parpadea para confirmar que eres tú...';
-      const abiertos = (ear(det.landmarks.getLeftEye()) + ear(det.landmarks.getRightEye())) / 2 > 0.25;
-      const parpadeo = !ojosAbiertosPrevio && abiertos;
-      ojosAbiertosPrevio = abiertos;
-      if (!parpadeo) return;
-
-      clearInterval(intervalo);
-      estado.textContent = 'Parpadeo detectado. Comparando con tu foto...';
-      const completa = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-      if (!completa) return fallaFacial('No se pudo leer tu rostro. Ponte de frente y con buena luz.');
-      const coincide = faceapi.euclideanDistance(descriptorRef, completa.descriptor) < 0.5;
-      if (!coincide) return fallaFacial('El rostro no coincide con el empleado de este PIN.');
-
-      // Foto en vivo como evidencia de la checada
-      const canvas = document.createElement('canvas');
-      const escala = Math.min(1, 480 / video.videoWidth);
-      canvas.width = Math.round(video.videoWidth * escala); canvas.height = Math.round(video.videoHeight * escala);
-      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-      const foto = canvas.toDataURL('image/jpeg', 0.75);
-      caja.classList.remove('buscando'); caja.classList.add('ok');
-      estado.textContent = '¡Eres tú! Registrando checada...';
-      setTimeout(() => registrarChecada(true, foto), 500);
-    } catch (e) {
-      clearInterval(intervalo);
-      fallaFacial('Ocurrió un error con la cámara. Intenta de nuevo.');
-    } finally { ocupado = false; }
-  }, 200);
+      const det = await faceapi.detectSingleFace(video, opciones);
+      // Dos cuadros seguidos con rostro de buen tamaño = foto nítida y de frente
+      vistos = det && det.box.width > video.videoWidth * 0.18 ? vistos + 1 : 0;
+      if (vistos >= 2) { capturar(); break; }
+    } catch (_) { break; }
+    await new Promise((r) => setTimeout(r, 120));
+  }
 }
 </script>
 </body>

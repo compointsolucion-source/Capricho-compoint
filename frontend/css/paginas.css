@@ -54,7 +54,7 @@ input[type="file"] { width:100%; padding:9px; border:1.5px solid var(--line); bo
 .tipo-pill { text-transform:uppercase; letter-spacing:.02em; }
 .estado-activo, .estado-aprobado, .accion-creada { background:var(--neon-bg); color:var(--neon); }
 .estado-inactivo, .estado-rechazado, .accion-eliminada { background:var(--red-bg); color:var(--red); }
-.estado-pendiente, .accion-editada { background:var(--amber-bg); color:var(--amber); }
+.estado-pendiente, .accion-editada, .accion-aprobada { background:var(--amber-bg); color:var(--amber); }
 .tipo-fijo, .tipo-oficial { background:var(--bg-panel-2); color:var(--muted); border:1px solid var(--line); }
 .tipo-nocturno { background:var(--amber-bg); color:var(--amber); border:1px solid rgba(247,198,93,0.3); }
 .tipo-flexible, .tipo-personalizado { background:var(--neon-bg); color:var(--neon); border:1px solid rgba(93,247,106,0.3); }

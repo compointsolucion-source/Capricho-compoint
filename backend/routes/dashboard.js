@@ -37,7 +37,7 @@ router.get('/', async (req, res, next) => {
       pool.query("SELECT COUNT(DISTINCT empleado_id)::int AS n FROM checadas WHERE fecha = $1 AND tipo = 'entrada'", [fecha]),
       pool.query('SELECT COUNT(DISTINCT empleado_id)::int AS n FROM vista_retardos WHERE fecha = $1 AND es_retardo', [fecha]),
       pool.query(
-        `SELECT c.hora, c.tipo, c.metodo, c.verificado_facial, e.nombre, e.puesto FROM checadas c
+        `SELECT c.hora, c.tipo, c.metodo, c.verificado_facial, c.revision, e.nombre, e.puesto FROM checadas c
          JOIN empleados e ON e.id = c.empleado_id WHERE c.fecha = $1 ORDER BY c.hora DESC, c.id DESC LIMIT 15`, [fecha]
       ),
       ausentesHoy()
