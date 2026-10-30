@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { migrar } = require('./utils/migrar');
+const licencia = require('./utils/licencia');
+const { verificarLicencia } = require('./middleware/licencia');
 
 if (!process.env.JWT_SECRET) {
   console.error('Falta la variable JWT_SECRET. Configúrala en Render (Environment).');
@@ -39,9 +41,15 @@ app.get('/', (req, res) => {
   if (process.env.FRONTEND_URL && req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
     return res.redirect(process.env.FRONTEND_URL.replace(/\/$/, '') + '/login.html');
   }
-  res.json({ ok: true, sistema: 'Capricho-compoint', api: '/api' });
+  res.json({ ok: true, sistema: 'Compoint Check', api: '/api' });
 });
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
+// Para el servidor de Compoint (Coolify): ¿el sistema está prendido?
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+// Suscripción de Compoint Check (solo aplica a los sistemas que Compoint crea para sus clientes)
+app.use('/api', verificarLicencia);
+app.use('/api/licencia', require('./routes/licencia'));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/recuperar', require('./routes/recuperar'));
@@ -74,4 +82,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 migrar()
   .catch((e) => console.error('[migrar] Error:', e.message))
-  .finally(() => app.listen(PORT, () => console.log(`Capricho-compoint escuchando en el puerto ${PORT}`)));
+  .then(() => licencia.iniciar())
+  .catch((e) => console.error('[licencia] Error:', e.message))
+  .finally(() => app.listen(PORT, () => console.log(`Compoint Check escuchando en el puerto ${PORT}`)));

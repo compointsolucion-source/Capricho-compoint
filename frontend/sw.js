@@ -1,4 +1,4 @@
-// Service worker: permite instalar Capricho como app en Windows/Android.
+// Service worker: permite instalar Compoint Check como app en Windows/Android.
 // Los datos NO se guardan: todo se consulta en línea para que la información siempre sea la real.
 // Solo se guardan en el equipo los archivos pesados que nunca cambian (reconocimiento
 // facial), para que la cámara abra al instante a partir de la segunda vez.

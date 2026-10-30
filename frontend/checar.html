@@ -27,7 +27,7 @@
   @keyframes flash { from { opacity:.9; } to { opacity:0; } }
   .res-tarde { background: var(--amber-bg); border: 1px solid rgba(247,198,93,.4); color: var(--amber); border-radius: 12px; padding: 12px; text-align:center; font-size: 13.5px; margin-top: 12px; }
 </style>
-<title>Registrar checada — Capricho-compoint</title>
+<title>Registrar checada — Compoint Check</title>
 </head>
 <body>
 <div class="checar-wrap">
@@ -129,6 +129,10 @@ function cargarDetector() {
 (async function inicio() {
   try {
     const r = await fetch(`${API_URL}/qr/valido/${encodeURIComponent(token)}`).then((x) => x.json());
+    if (r.licencia) {
+      document.getElementById('pasoCargando').innerHTML = `<div class="resultado error">${esc(r.error)}</div>`;
+      return;
+    }
     if (!r.valido) return mostrar('pasoExpirado');
     if (r.requiere_facial) {
       cargarDetector(); // se descarga mientras escribes tu PIN
@@ -248,7 +252,7 @@ async function tomarSelfie() {
     await new Promise((r) => { if (video.readyState >= 1) r(); else video.onloadedmetadata = r; });
     await video.play().catch(() => {});
   } catch (e) {
-    return errorCamara('No se pudo abrir la cámara. Dale permiso a la cámara (en la app: Ajustes → Apps → Capricho → Permisos; en el navegador: el ícono del candado junto a la dirección).');
+    return errorCamara('No se pudo abrir la cámara. Dale permiso a la cámara (en la app: Ajustes → Apps → Compoint Check → Permisos; en el navegador: el ícono del candado junto a la dirección).');
   }
 
   const capturar = () => {

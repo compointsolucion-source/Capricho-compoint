@@ -1,4 +1,4 @@
-// Firma de la APK de Capricho Compoint (se agrega a android/app/build.gradle en la compilación).
+// Firma de la APK de Compoint Check (se agrega a android/app/build.gradle en la compilación).
 // Siempre se firma con la misma llave para que las actualizaciones se instalen encima sin desinstalar.
 android {
     signingConfigs {

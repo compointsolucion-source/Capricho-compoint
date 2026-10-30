@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
 <link rel="stylesheet" href="css/finanzas.css">
-<title>Capricho Compoint</title>
+<title>Compoint Check</title>
 <style>
   .app-inicio { min-height: 100vh; max-width: 460px; margin: 0 auto; padding: 28px 18px 30px; display: flex; flex-direction: column; }
   .app-inicio .logo-chip { align-self: center; margin-bottom: 18px; }
@@ -54,7 +54,7 @@ function tic() {
 }
 tic(); setInterval(tic, 10000);
 if (getToken() && getUsuario()) document.getElementById('opPanel').href = 'dashboard.html';
-if (!esAppAndroid() && /Android/i.test(navigator.userAgent)) document.querySelector('.solo-navegador').style.display = '';
+if (!esAppAndroid() && apkDisponible() && /Android/i.test(navigator.userAgent)) document.querySelector('.solo-navegador').style.display = '';
 fetch('descargas/version.json', { cache: 'no-store' }).then((r) => r.json()).then((v) => {
   document.getElementById('ver').textContent = esAppAndroid() ? `App Android ${v.version}` : '';
 }).catch(() => {});

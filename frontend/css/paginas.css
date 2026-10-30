@@ -1,5 +1,5 @@
 /* ============================================
-   Capricho-compoint — componentes de las pantallas
+   Compoint Check — componentes de las pantallas
    (unificado desde los estilos del checador PHP)
    ============================================ */
 
@@ -228,3 +228,8 @@ tr.fila-retardo td:first-child { border-left:2px solid var(--amber); }
 .ventana .caja { background: var(--bg-panel); border:1px solid var(--line-bright); border-radius: 12px; width: 100%; max-width: 420px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .ventana h3 { margin: 0 0 6px; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; }
 .ventana p { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+/* Aviso de la suscripción de Compoint Check */
+.lic-aviso { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; border-radius:10px; padding:12px 16px; margin-bottom:18px; font-size:13.5px; line-height:1.5; }
+.lic-aviso.ambar { background:var(--amber-bg); border:1px solid rgba(247,198,93,.5); color:var(--white); }
+.lic-aviso.rojo { background:var(--red-bg); border:1px solid rgba(247,106,106,.55); color:var(--white); }
+.lic-aviso .btn-mini { white-space:nowrap; }

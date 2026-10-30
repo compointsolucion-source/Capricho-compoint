@@ -1,4 +1,4 @@
-# Compila la APK de Android de Capricho Compoint en los servidores de GitHub
+# Compila la APK de Android de Compoint Check en los servidores de GitHub
 # y la deja en frontend/descargas/ para descargarla desde la página web.
 # Se ejecuta sola cuando cambia algo en app-android/, o a mano desde la pestaña "Actions".
 name: APK Android

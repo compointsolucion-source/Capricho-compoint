@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
-<title>Iniciar sesión — Capricho-compoint</title>
+<title>Iniciar sesión — Compoint Check</title>
 </head>
 <body>
 <div class="login-wrap">
@@ -19,11 +19,11 @@
       <div class="logo-chip"><img src="img/logo.png" alt="Compoint"></div>
     </div>
     <div class="claim">
-      <div class="eyebrow">Control de asistencia</div>
+      <div class="eyebrow">Compoint Check · control de asistencia</div>
       <h1>Cada entrada, cada <span class="accent">salida</span>, con precisión.</h1>
       <p>Checador de Compoint: entradas, salidas y retardos del personal con código QR, PIN, verificación facial y lector de huella.</p>
     </div>
-    <div class="foot-note">capricho-compoint · compoint.com.mx</div>
+    <div class="foot-note">compoint check · compoint.com.mx</div>
   </div>
   <div class="login-form-side">
     <form class="login-form" id="formLogin">
@@ -52,7 +52,7 @@
 <script src="js/api.js"></script>
 <script>
 if (getToken() && getUsuario()) location.href = 'dashboard.html';
-if (esAppAndroid()) document.getElementById('lnkApk').style.display = 'none';
+if (esAppAndroid() || !apkDisponible()) document.getElementById('lnkApk').style.display = 'none';
 const form = document.getElementById('formLogin');
 const btn = document.getElementById('btnEntrar');
 form.addEventListener('submit', async (e) => {

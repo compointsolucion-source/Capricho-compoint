@@ -45,7 +45,7 @@ async function smtpListo() {
 
 function correoHtml({ empresa, nombre, enlace, que }) {
   return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e3e8e5;border-radius:12px;overflow:hidden">
-    <div style="background:#0a0c0a;color:#5df76a;padding:18px 22px;font-weight:700;font-size:16px">${empresa} · Capricho Compoint</div>
+    <div style="background:#0a0c0a;color:#5df76a;padding:18px 22px;font-weight:700;font-size:16px">${empresa} · Compoint Check</div>
     <div style="padding:22px;color:#16201a;font-size:14px;line-height:1.55">
       <p>Hola ${nombre}:</p>
       <p>Recibimos una solicitud para crear ${que} nuevo. Toca el botón (vence en ${MINUTOS} minutos y solo sirve una vez):</p>

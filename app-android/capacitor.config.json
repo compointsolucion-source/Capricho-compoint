@@ -1,6 +1,6 @@
 {
   "appId": "mx.com.compoint.capricho",
-  "appName": "Capricho Compoint",
+  "appName": "Compoint Check",
   "webDir": "www",
   "server": {
     "url": "https://capricho-compoint-web.onrender.com/app.html",

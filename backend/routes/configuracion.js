@@ -78,7 +78,7 @@ router.put('/smtp', async (req, res, next) => {
 router.post('/smtp/probar', async (req, res, next) => {
   try {
     if (!req.body.correo) return res.status(400).json({ error: 'Escribe a qué correo mandar la prueba.' });
-    const r = await enviarCorreo(req.body.correo, 'Correo de prueba — Capricho-compoint', 'Si ves esto, tu configuración de correo funciona correctamente.');
+    const r = await enviarCorreo(req.body.correo, 'Correo de prueba — Compoint Check', 'Si ves esto, tu configuración de correo funciona correctamente.');
     if (r === true) return res.json({ ok: true });
     res.status(400).json({ error: r });
   } catch (e) { next(e); }

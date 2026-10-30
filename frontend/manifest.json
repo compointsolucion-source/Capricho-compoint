@@ -1,6 +1,6 @@
 {
-  "name": "Capricho Compoint",
-  "short_name": "Capricho",
+  "name": "Compoint Check",
+  "short_name": "Check",
   "description": "Checador, corte del día, nómina y finanzas de Compoint",
   "start_url": "login.html",
   "scope": "./",

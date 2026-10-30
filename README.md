@@ -1,4 +1,4 @@
-# Capricho-compoint
+# Compoint Check
 
 Checador de asistencia de **Compoint, punto de soluciones**: entradas, salidas y retardos con
 **código QR dinámico + PIN** desde el celular, **verificación facial** opcional (parpadeo + comparación
@@ -29,7 +29,7 @@ capricho-compoint/
 
 | Variable | Valor |
 |---|---|
-| `DATABASE_URL` | Cadena de conexión de Neon (proyecto Capricho-compoint) |
+| `DATABASE_URL` | Cadena de conexión de Neon (proyecto Compoint Check) |
 | `JWT_SECRET` | Texto largo y secreto |
 | `AGENTE_TOKEN` | Clave para el agente del lector de huella |
 

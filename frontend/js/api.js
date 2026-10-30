@@ -1,5 +1,5 @@
 // ============================================
-// Capricho-compoint — utilidades comunes
+// Compoint Check — utilidades comunes
 // ============================================
 
 const BASE_SERVIDOR = API_URL.replace(/\/api$/, '');
@@ -152,15 +152,15 @@ function aplicarTema(tema) {
 const MENU = [
   { href: 'dashboard.html', texto: 'Dashboard' },
   { grupo: 'Finanzas', admin: true },
-  { href: 'corte.html', texto: 'Corte del día', admin: true },
-  { href: 'semana.html', texto: 'Semana', admin: true },
-  { href: 'nomina.html', texto: 'Nómina y pagos', admin: true },
-  { href: 'mes.html', texto: 'Mes', admin: true },
-  { href: 'catalogos.html', texto: 'Proveedores y conceptos', admin: true },
+  { href: 'corte.html', texto: 'Corte del día', admin: true, modulo: 'finanzas' },
+  { href: 'semana.html', texto: 'Semana', admin: true, modulo: 'finanzas' },
+  { href: 'nomina.html', texto: 'Nómina y pagos', admin: true, modulo: 'nomina' },
+  { href: 'mes.html', texto: 'Mes', admin: true, modulo: 'finanzas' },
+  { href: 'catalogos.html', texto: 'Proveedores y conceptos', admin: true, modulo: 'finanzas' },
   { grupo: 'Personal' },
   { href: 'pantalla-qr.html', texto: 'Pantalla QR' },
   { href: 'empleados.html', texto: 'Empleados', admin: true },
-  { href: 'permisos.html', texto: 'Permisos', admin: true },
+  { href: 'permisos.html', texto: 'Permisos', admin: true, modulo: 'nomina' },
   { href: 'organigrama.html', texto: 'Organigrama', admin: true },
   { href: 'horarios.html', texto: 'Horarios', admin: true },
   { href: 'festivos.html', texto: 'Días festivos', admin: true },
@@ -175,10 +175,57 @@ const MENU = [
   { href: 'configuracion.html', texto: 'Configuración', admin: true }
 ];
 
-function pintarMenu(items, pie) {
+// ---------- Suscripción de Compoint Check ----------
+// Los sistemas de los clientes de Compoint tienen paquete y vencimiento: el menú solo muestra
+// los módulos del paquete, y avisa 7 días antes de vencer o cuando quedó en "solo consulta".
+function licenciaGuardada() { try { return JSON.parse(localStorage.getItem('cc_licencia') || 'null'); } catch (_) { return null; } }
+function filtrarPorPaquete(items) {
+  const l = licenciaGuardada();
+  if (!l || !l.control || !Array.isArray(l.modulos)) return items;
+  const vis = items.filter((it) => !it.modulo || l.modulos.includes(it.modulo));
+  return vis.filter((it, i) => !it.grupo || (vis[i + 1] && !vis[i + 1].grupo)); // sin grupos vacíos
+}
+let _menu = null;
+async function revisarLicencia() {
+  let l;
+  try { l = await fetch(API_URL + '/licencia').then((r) => r.json()); } catch (_) { return; }
+  const antes = localStorage.getItem('cc_licencia');
+  try { localStorage.setItem('cc_licencia', JSON.stringify(l)); } catch (_) {}
+  if (_menu && antes !== JSON.stringify(l)) pintarMenu(_menu.items, _menu.pie);
+  pintarAvisoLicencia(l);
+}
+function pintarAvisoLicencia(l) {
+  document.querySelectorAll('.lic-aviso').forEach((x) => x.remove());
+  if (!l || !l.control || (!l.bloqueado && !l.aviso)) return;
+  const fecha = l.vence ? l.vence.split('-').reverse().join('/') : '';
+  const d = document.createElement('div');
+  d.className = 'lic-aviso ' + (l.bloqueado ? 'rojo' : 'ambar');
+  d.innerHTML = l.bloqueado
+    ? `<div><b>${l.motivo === 'suspendida' ? '⛔ Tu sistema Compoint Check está suspendido.' : `⛔ Tu suscripción de Compoint Check venció el ${fecha}.`}</b>
+        Está en <b>solo consulta</b>: puedes ver tu información, pero no checar ni capturar. Para renovar: ${esc(l.contacto || 'Compoint')}.</div>
+       <button type="button" class="btn-mini">Ya pagué, revisar</button>`
+    : `<div>⏳ Tu suscripción de Compoint Check${l.paquete_nombre ? ` (<b>${esc(l.paquete_nombre)}</b>)` : ''} vence ${l.dias === 0 ? '<b>hoy</b>' : l.dias === 1 ? '<b>mañana</b>' : `en <b>${l.dias} días</b>`} (${fecha}). Para renovar: ${esc(l.contacto || 'Compoint')}.</div>`;
+  const b = d.querySelector('button');
+  if (b) b.onclick = async () => {
+    b.disabled = true; b.textContent = 'Revisando...';
+    try {
+      const r = await fetch(API_URL + '/licencia/revisar', { method: 'POST' }).then((x) => x.json());
+      if (!r.bloqueado) { localStorage.removeItem('cc_licencia'); location.reload(); return; }
+      toast(r.espera ? 'Espera unos segundos y vuelve a intentar.' : 'Todavía no aparece tu pago. Si ya pagaste, avisa a Compoint.', 'error');
+    } catch (_) { toast('Sin conexión. Intenta de nuevo.', 'error'); }
+    b.disabled = false; b.textContent = 'Ya pagué, revisar';
+  };
+  const donde = document.querySelector('.main') || document.querySelector('.portal-wrap') || document.body;
+  donde.prepend(d);
+}
+
+function pintarMenu(itemsTodos, pie) {
+  _menu = { items: itemsTodos, pie };
+  const items = filtrarPorPaquete(itemsTodos);
   const actual = location.pathname.split('/').pop() || 'dashboard.html';
   const aside = document.getElementById('sidebar');
   if (!aside) return;
+  document.querySelectorAll('.menu-movil').forEach((x) => x.remove());
   aside.className = 'sidebar';
   aside.innerHTML = `
     <div class="brand"><a href="${items[0] ? items[0].href : '#'}"><div class="logo-chip"><img src="img/logo.png" alt="Compoint"></div></a></div>
@@ -192,6 +239,7 @@ function pintarMenu(items, pie) {
   barra.innerHTML = `<img src="img/logo.png" alt="Compoint"><button type="button">☰ Menú</button>`;
   barra.querySelector('button').onclick = () => aside.classList.toggle('abierto');
   document.body.prepend(barra);
+  if (!pintarMenu._revisada) { pintarMenu._revisada = true; revisarLicencia(); }
 }
 
 // Llamar al inicio de cada pantalla del panel. Regresa el usuario o redirige al login.
@@ -230,10 +278,10 @@ async function iniciarFinanzas(permisosPagina = []) {
     pintarMenu([
       { href: 'portal.html', texto: 'Mi portal' },
       { grupo: 'Finanzas' },
-      ...(p.corte ? [{ href: 'corte.html', texto: 'Corte del día' }] : []),
-      ...(p.ver_semana || p.surtida || p.gastos ? [{ href: 'semana.html', texto: p.ver_semana ? 'Semana' : 'Gastos y surtida' }] : []),
-      ...(p.nomina ? [{ href: 'nomina.html', texto: 'Nómina y pagos' }] : []),
-      ...(p.ver_utilidad ? [{ href: 'mes.html', texto: 'Mes' }] : [])
+      ...(p.corte ? [{ href: 'corte.html', texto: 'Corte del día', modulo: 'finanzas' }] : []),
+      ...(p.ver_semana || p.surtida || p.gastos ? [{ href: 'semana.html', texto: p.ver_semana ? 'Semana' : 'Gastos y surtida', modulo: 'finanzas' }] : []),
+      ...(p.nomina ? [{ href: 'nomina.html', texto: 'Nómina y pagos', modulo: 'nomina' }] : []),
+      ...(p.ver_utilidad ? [{ href: 'mes.html', texto: 'Mes', modulo: 'finanzas' }] : [])
     ], `<div class="user-name">${esc(yo.nombre)}</div>
         <div style="font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.06em;">${esc(yo.puesto || 'Empleado')}</div>
         <a href="#" class="logout" onclick="localStorage.removeItem('cc_token_empleado');location.href='portal.html';return false;">Cerrar sesión</a>`);
@@ -291,11 +339,14 @@ window.addEventListener('beforeinstallprompt', (e) => {
   document.querySelectorAll('.solo-instalable').forEach((x) => { x.style.display = ''; });
 });
 async function instalarApp() {
-  if (!_instalarApp) return toast('Abre el menú del navegador (⋮) y elige "Instalar Capricho Compoint".');
+  if (!_instalarApp) return toast('Abre el menú del navegador (⋮) y elige "Instalar Compoint Check".');
   _instalarApp.prompt();
   await _instalarApp.userChoice;
   _instalarApp = null;
 }
+// La app de Android abre el sistema de Compoint; los sistemas de los clientes se usan en el navegador
+// (o se instalan desde el navegador como app), así que ahí no se ofrece la APK.
+function apkDisponible() { return ['capricho-compoint-web.onrender.com', 'localhost', '127.0.0.1'].includes(location.hostname); }
 // ¿Corre dentro de la app de Android?
 function esAppAndroid() { return /CaprichoApp/.test(navigator.userAgent) || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
 

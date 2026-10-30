@@ -1,7 +1,7 @@
 {
-  "name": "capricho-compoint-backend",
+  "name": "compoint-check-backend",
   "version": "1.0.0",
-  "description": "Capricho-compoint — checador de asistencia (QR + PIN, huella, facial) de Compoint",
+  "description": "Compoint Check — checador de asistencia (QR + PIN, huella, facial) de Compoint",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

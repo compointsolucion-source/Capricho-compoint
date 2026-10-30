@@ -5,6 +5,15 @@ const { verificarToken, requiereAdmin } = require('../middleware/auth');
 const { guardarDataUrl } = require('../utils/archivos');
 const { buscarEmpleadoPorPin } = require('../utils/pin');
 const { auditarFin } = require('../utils/finanzas');
+const { estado: estadoLicencia } = require('../utils/licencia');
+
+// Límite de empleados activos según el paquete de Compoint Check (null = sin límite)
+async function sinCupo() {
+  const max = estadoLicencia().max_empleados;
+  if (!max) return null;
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM empleados WHERE activo');
+  return rows[0].n >= max ? `Tu paquete permite hasta ${max} empleados activos. Desactiva a alguien o pide a Compoint un paquete más grande.` : null;
+}
 
 const router = express.Router();
 router.use(verificarToken);
@@ -86,6 +95,7 @@ router.post('/', requiereAdmin, async (req, res, next) => {
   try {
     const { errores, datos } = await validar(req.body);
     if (errores.length) return res.status(400).json({ error: errores.join(' ') });
+    if (datos.activo) { const c = await sinCupo(); if (c) return res.status(403).json({ error: c }); }
     const fotoUrl = req.body.foto ? await guardarDataUrl(req.body.foto) : null;
     const pinHash = datos.pin ? await bcrypt.hash(datos.pin, 10) : null;
     const { rows } = await pool.query(
@@ -103,6 +113,10 @@ router.put('/:id', requiereAdmin, async (req, res, next) => {
     const id = Number(req.params.id);
     const { errores, datos } = await validar(req.body, id);
     if (errores.length) return res.status(400).json({ error: errores.join(' ') });
+    if (datos.activo) {
+      const antes = (await pool.query('SELECT activo FROM empleados WHERE id = $1', [id])).rows[0];
+      if (antes && !antes.activo) { const c = await sinCupo(); if (c) return res.status(403).json({ error: c }); }
+    }
     const sets = ['nombre=$1', 'puesto=$2', 'departamento=$3', 'sucursal=$4', 'numero_empleado=$5', 'huella_id=$6', 'horario_id=$7', 'fecha_ingreso=$8', 'activo=$9', 'sueldo_diario=$10', 'correo=$11'];
     const valores = [datos.nombre, datos.puesto, datos.departamento, datos.sucursal, datos.numero_empleado, datos.huella_id, datos.horario_id, datos.fecha_ingreso, datos.activo, datos.sueldo_diario, datos.correo];
     if (datos.pin) { valores.push(await bcrypt.hash(datos.pin, 10)); sets.push(`pin_hash=$${valores.length}`); }
@@ -122,6 +136,8 @@ router.put('/:id', requiereAdmin, async (req, res, next) => {
 
 router.patch('/:id/toggle', requiereAdmin, async (req, res, next) => {
   try {
+    const antes = (await pool.query('SELECT activo FROM empleados WHERE id = $1', [req.params.id])).rows[0];
+    if (antes && !antes.activo) { const c = await sinCupo(); if (c) return res.status(403).json({ error: c }); }
     await pool.query('UPDATE empleados SET activo = NOT activo WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) { next(e); }

@@ -40,7 +40,7 @@ router.get('/respaldo', async (req, res, next) => {
   try {
     const sinFotos = req.query.sin_fotos === '1';
     const { fecha, hora } = ahora();
-    let sql = `-- Respaldo Capricho-compoint — ${fecha} ${hora}\n-- Restaurar: pegar en el SQL Editor de Neon sobre una base con el esquema creado.\nBEGIN;\n`;
+    let sql = `-- Respaldo Compoint Check — ${fecha} ${hora}\n-- Restaurar: pegar en el SQL Editor de Neon sobre una base con el esquema creado.\nBEGIN;\n`;
     const orden = [...TABLAS].reverse();
     sql += `TRUNCATE ${orden.join(', ')} RESTART IDENTITY CASCADE;\n\n`;
     for (const t of TABLAS) {
@@ -65,7 +65,7 @@ router.get('/respaldo', async (req, res, next) => {
       sql += '\n';
     }
     sql += 'COMMIT;\n';
-    const nombre = `respaldo_capricho_${fecha}_${hora.replace(/:/g, '')}.sql`;
+    const nombre = `respaldo_compoint_check_${fecha}_${hora.replace(/:/g, '')}.sql`;
     res.set('Content-Type', 'application/sql; charset=utf-8');
     res.set('Content-Disposition', `attachment; filename="${nombre}"`);
     res.send(sql);

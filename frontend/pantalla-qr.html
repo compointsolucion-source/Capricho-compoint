@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
-<title>Checador — Capricho-compoint</title>
+<title>Checador — Compoint Check</title>
 <script src="js/vendor/qrcode-generator.js"></script>
 </head>
 <body>
@@ -49,8 +49,11 @@ async function renovar() {
     document.getElementById('qrcode').innerHTML = q.createSvgTag({ cellSize: celda, margin: 0, scalable: false });
     document.getElementById('estado').textContent = '';
   } catch (e) {
-    document.getElementById('estado').textContent = 'Sin conexión con el servidor. Reintentando...';
-    restante = 5;
+    // Suscripción vencida o suspendida: el checador queda en pausa (el mensaje lo manda el servidor)
+    const pausa = /suscripción|pausa/i.test(e.message);
+    document.getElementById('estado').textContent = pausa ? e.message : 'Sin conexión con el servidor. Reintentando...';
+    if (pausa) document.getElementById('qrcode').innerHTML = '';
+    restante = pausa ? 60 : 5;
   }
 }
 function tic() {

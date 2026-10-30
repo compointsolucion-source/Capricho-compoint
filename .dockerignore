@@ -1,0 +1,7 @@
+.git
+.github
+app-android
+**/node_modules
+backend/.env
+*.keystore
+README.md

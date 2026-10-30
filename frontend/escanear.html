@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
-<title>Escanear QR — Capricho Compoint</title>
+<title>Escanear QR — Compoint Check</title>
 <style>
   body { background: #000; }
   .esc { position: fixed; inset: 0; display:flex; flex-direction:column; }
@@ -29,7 +29,7 @@
 <div class="esc">
   <video id="video" playsinline muted autoplay></video>
   <div class="marco"></div>
-  <div class="esc-arriba"><a href="app.html">‹ Regresar</a><span style="font-size:13px;opacity:.85;">Capricho Compoint</span></div>
+  <div class="esc-arriba"><a href="app.html">‹ Regresar</a><span style="font-size:13px;opacity:.85;">Compoint Check</span></div>
   <div class="esc-abajo"><p id="msg">Apunta al código QR de la pantalla de la entrada</p><div id="err"></div></div>
 </div>
 <canvas id="lienzo" style="display:none;"></canvas>
@@ -59,7 +59,7 @@ async function iniciar() {
     await video.play().catch(() => {});
     requestAnimationFrame(leer);
   } catch (e) {
-    document.getElementById('err').innerHTML = '<div class="err">No se pudo abrir la cámara. Dale permiso de cámara a la app (Ajustes → Apps → Capricho Compoint → Permisos) e intenta de nuevo.</div>';
+    document.getElementById('err').innerHTML = '<div class="err">No se pudo abrir la cámara. Dale permiso de cámara a la app (Ajustes → Apps → Compoint Check → Permisos) e intenta de nuevo.</div>';
   }
 }
 

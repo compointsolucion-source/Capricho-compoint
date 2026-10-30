@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginas.css">
 <link rel="stylesheet" href="css/finanzas.css">
-<title>Portal del empleado — Capricho-compoint</title>
+<title>Portal del empleado — Compoint Check</title>
 </head>
 <body>
 <div class="portal-wrap">
@@ -145,17 +145,25 @@ document.getElementById('formSol').addEventListener('submit', async (ev) => {
   } catch (e) { toast(e.message, 'error'); }
 });
 function pintarModulos(p) {
+  // Solo los módulos que incluye el paquete de Compoint Check del negocio
+  const lic = licenciaGuardada();
+  const tiene = (mod) => !lic || !lic.control || !Array.isArray(lic.modulos) || lic.modulos.includes(mod);
   const m = [
-    p.corte && ['corte.html', '💵', 'Corte del día', 'Captura la venta y los gastos de hoy'],
-    (p.surtida || p.gastos || p.ver_semana) && ['semana.html', '🧾', p.ver_semana ? 'Hoja semanal' : 'Gastos y surtida', 'Compras y gastos de la semana'],
-    p.nomina && ['nomina.html', '👥', 'Nómina y pagos', 'Pagos al personal'],
-    p.ver_utilidad && ['mes.html', '📈', 'Resumen del mes', 'Ventas, gastos y utilidad']
+    tiene('finanzas') && p.corte && ['corte.html', '💵', 'Corte del día', 'Captura la venta y los gastos de hoy'],
+    tiene('finanzas') && (p.surtida || p.gastos || p.ver_semana) && ['semana.html', '🧾', p.ver_semana ? 'Hoja semanal' : 'Gastos y surtida', 'Compras y gastos de la semana'],
+    tiene('nomina') && p.nomina && ['nomina.html', '👥', 'Nómina y pagos', 'Pagos al personal'],
+    tiene('finanzas') && p.ver_utilidad && ['mes.html', '📈', 'Resumen del mes', 'Ventas, gastos y utilidad']
   ].filter(Boolean);
   document.getElementById('modulos').innerHTML = m.length ? `<div class="lbl" style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;">Mis módulos</div>
     <div class="dos" style="margin-bottom:20px;">${m.map(([href, ico, t, d]) => `<a href="${href}" class="tarjeta" style="display:block;margin:0;border-color:rgba(93,247,106,.35);">
       <div style="font-size:22px;">${ico}</div><div style="font-weight:700;margin-top:4px;">${t}</div><div style="font-size:12px;color:var(--muted);">${d}</div></a>`).join('')}</div>` : '';
 }
 async function cargarPagos() {
+  // Paquete Check Básico (sin nómina): no se muestra "Mi pago"
+  const lic = licenciaGuardada();
+  const caja = document.getElementById('misPagos').closest('.panel');
+  if (lic && lic.control && Array.isArray(lic.modulos) && !lic.modulos.includes('nomina')) { if (caja) caja.style.display = 'none'; return; }
+  if (caja) caja.style.display = '';
   try {
     const d = await papi('/portal/pagos');
     const a = d.semana_actual;
@@ -187,6 +195,7 @@ async function confirmarRecibido(id, total) {
 }
 document.getElementById('btnSalir').onclick = () => { localStorage.removeItem('cc_token_empleado'); vista(false); };
 ajustarCampos();
+revisarLicencia();
 if (localStorage.getItem('cc_token_empleado')) cargar(); else vista(false);
 </script>
 </body>

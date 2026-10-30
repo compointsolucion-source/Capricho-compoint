@@ -165,9 +165,5 @@ JOIN empleados e ON e.id = c.empleado_id
 JOIN horarios h ON h.id = e.horario_id
 WHERE c.tipo = 'entrada' AND h.hora_entrada IS NOT NULL;
 
--- Usuario dueño inicial (solo si todavía no hay ningún usuario)
--- Usuario: Admin   Contraseña temporal: Compoint2026  (cámbiala al entrar)
-INSERT INTO administradores (nombre, usuario, password_hash, rol)
-SELECT 'Jose Antonio Hernandez', 'Admin',
-       '$2a$10$jKKUHzO0fM.V6VcQt4qz2.CwjEz4ULQPamU5edV.ImcR54WMxy2U2', 'admin'
-WHERE NOT EXISTS (SELECT 1 FROM administradores);
+-- El usuario dueño inicial lo crea utils/migrar.js al arrancar (con los datos del alta, si los hay).
+

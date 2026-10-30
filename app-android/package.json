@@ -2,7 +2,7 @@
   "name": "capricho-compoint-android",
   "version": "1.0.0",
   "private": true,
-  "description": "App de Android de Capricho-compoint (abre el sistema en línea con permisos de cámara)",
+  "description": "App de Android de Compoint Check (abre el sistema en línea con permisos de cámara)",
   "dependencies": {
     "@capacitor/android": "6.2.2",
     "@capacitor/core": "6.2.2"
