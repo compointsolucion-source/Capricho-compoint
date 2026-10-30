@@ -11,7 +11,8 @@ function getUsuario() {
 function esAdmin() { return (getUsuario() || {}).rol === 'admin'; }
 
 // Petición al servidor. tokenKey permite usar la sesión del portal del empleado.
-async function api(ruta, { method = 'GET', body, tokenKey = 'cc_token', sinRedirigir = false } = {}) {
+// window.CC_TOKEN_KEY: las pantallas de terminal (terminal.html) usan la llave del equipo, no la del usuario
+async function api(ruta, { method = 'GET', body, tokenKey = window.CC_TOKEN_KEY || 'cc_token', sinRedirigir = false } = {}) {
   const headers = {};
   const token = localStorage.getItem(tokenKey);
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -159,6 +160,7 @@ const MENU = [
   { href: 'catalogos.html', texto: 'Proveedores y conceptos', admin: true, modulo: 'finanzas' },
   { grupo: 'Personal' },
   { href: 'pantalla-qr.html', texto: 'Pantalla QR' },
+  { href: 'terminales.html', texto: 'Terminales', admin: true },
   { href: 'empleados.html', texto: 'Empleados', admin: true },
   { href: 'permisos.html', texto: 'Permisos', admin: true, modulo: 'nomina' },
   { href: 'organigrama.html', texto: 'Organigrama', admin: true },

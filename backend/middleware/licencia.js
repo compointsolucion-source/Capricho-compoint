@@ -5,8 +5,9 @@ const { estado } = require('../utils/licencia');
 //  · Paquete → qué módulos se pueden usar (Básico: checador; Nómina: + nómina; Total: todo).
 // Iniciar sesión, recuperar la contraseña y la licencia misma siempre funcionan.
 
-const SIEMPRE = [/^\/auth\//, /^\/recuperar\//, /^\/licencia(\/|$)/, /^\/salud$/, /^\/portal\/login$/, /^\/archivos\//];
-const CHECADOR = [/^\/qr\//, /^\/huella\//];
+const SIEMPRE = [/^\/auth\//, /^\/recuperar\//, /^\/licencia(\/|$)/, /^\/salud$/, /^\/portal\/login$/, /^\/archivos\//,
+  /^\/terminales\/(yo|salir)$/]; // la terminal siempre puede ver su estado y cerrarse con su PIN
+const CHECADOR = [/^\/qr\//, /^\/huella\//, /^\/terminales\/checar$/];
 // Rutas de finanzas que entran en el paquete Nómina (el resto es del paquete Total)
 const DE_NOMINA = [/^\/finanzas\/yo$/, /^\/finanzas\/nomina/, /^\/finanzas\/auditoria$/, /^\/portal\/pagos/];
 const DE_FINANZAS = [/^\/finanzas\//];

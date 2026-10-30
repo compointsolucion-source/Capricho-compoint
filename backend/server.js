@@ -58,6 +58,7 @@ app.use('/api/horarios', require('./routes/horarios'));
 app.use('/api/festivos', require('./routes/festivos'));
 app.use('/api/checadas', require('./routes/checadas'));
 app.use('/api/qr', require('./routes/qr'));
+app.use('/api/terminales', require('./routes/terminales'));
 app.use('/api/revision', require('./routes/revision'));
 app.use('/api/huella', require('./routes/huella'));
 app.use('/api/incidencias', require('./routes/incidencias'));

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Compoint Check Terminal</title>
+<style>
+  :root { --bg: #0a0c0a; --panel: #121512; --line: #263029; --line2: #3a5a44; --blanco: #f4f7f5; --gris: #9aa79f; --gris2: #6d7a72; --neon: #5df76a; --rojo: #f76a6a; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: radial-gradient(ellipse 900px 500px at 50% 0%, rgba(93,247,106,.08), transparent 60%), var(--bg); color: var(--blanco);
+    font-family: 'Segoe UI', Roboto, -apple-system, Arial, sans-serif; display: flex; align-items: center; justify-content: center; padding: 20px; user-select: none; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 30px 28px; width: 440px; max-width: 100%; text-align: center; }
+  .logo { display: inline-flex; background: #fff; border-radius: 12px; padding: 8px 14px; margin-bottom: 18px; }
+  .logo img { height: 46px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { color: var(--gris); font-size: 14.5px; line-height: 1.5; margin: 0 0 20px; }
+  p b { color: var(--blanco); }
+  input { width: 100%; font-size: 17px; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line2); background: var(--bg); color: var(--blanco); outline: none; text-align: center; }
+  input:focus { border-color: var(--neon); }
+  input.codigo { font-family: Consolas, 'Courier New', monospace; font-size: 38px; letter-spacing: .35em; padding-left: 22px; }
+  button { width: 100%; margin-top: 14px; padding: 15px; font-size: 16px; font-weight: 700; border-radius: 12px; border: 0; background: var(--neon); color: #06110a; cursor: pointer; }
+  button.sec { background: transparent; color: var(--blanco); border: 1px solid var(--line2); font-weight: 600; }
+  button:disabled { opacity: .6; }
+  .error { color: var(--rojo); font-size: 14px; min-height: 20px; margin-top: 12px; }
+  .liga { display: inline-block; margin-top: 18px; color: var(--gris); font-size: 13px; text-decoration: underline; cursor: pointer; }
+  .pie { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-family: Consolas, monospace; font-size: 11px; color: var(--gris2); letter-spacing: .08em; }
+  .pie b { color: var(--neon); }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><img src="logo.png" alt="Compoint"></div>
+
+  <!-- Conectar con el código -->
+  <div id="vCodigo" class="oculto">
+    <h1>Conectar este equipo</h1>
+    <p>En tu sistema Compoint Check entra a <b>Terminales → Agregar terminal</b> y escribe aquí el código de 6 números.</p>
+    <form id="fCodigo" autocomplete="off">
+      <input class="codigo" id="codigo" inputmode="numeric" maxlength="6" placeholder="000000">
+      <button id="bCodigo">Conectar</button>
+    </form>
+    <div class="error" id="eCodigo"></div>
+    <span class="liga" id="lDireccion">¿No funciona el código? Escribir la dirección del sistema</span>
+  </div>
+
+  <!-- Conectar con la dirección (sistemas propios o sin internet a compoint.com.mx) -->
+  <div id="vDireccion" class="oculto">
+    <h1>Dirección del sistema</h1>
+    <p>Escribe la dirección de tu sistema (por ejemplo <b>minegocio.compoint.com.mx</b>) y el código de 6 números.</p>
+    <form id="fDireccion" autocomplete="off">
+      <input id="direccion" placeholder="minegocio.compoint.com.mx" autocapitalize="off" spellcheck="false">
+      <input class="codigo" id="codigo2" inputmode="numeric" maxlength="6" placeholder="000000" style="margin-top:12px;">
+      <button>Conectar</button>
+    </form>
+    <div class="error" id="eDireccion"></div>
+    <span class="liga" id="lCodigo">Volver</span>
+  </div>
+
+  <!-- Mensajes (sin internet, pantalla cerrada) -->
+  <div id="vMensaje" class="oculto">
+    <h1 id="mTitulo"></h1>
+    <p id="mTexto"></p>
+    <div id="mBotones"></div>
+  </div>
+</div>
+<div class="pie">COMPOINT <b>CHECK</b> · TERMINAL · compoint.com.mx</div>
+
+<script>
+// Pantalla propia de la app de terminal (programa de Windows y app de Android).
+// 1) Con el código de 6 números pregunta a compoint.com.mx cuál es el sistema del negocio.
+// 2) Abre ese sistema en terminal.html, que conecta el equipo y regresa aquí con su función.
+// 3) Desde entonces abre directo el sistema; si es Pantalla QR o Tableta, en pantalla completa fija.
+const CENTRAL = 'https://www.compoint.com.mx/check/terminal.php';
+const CONF = 'cc_terminal_app';
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+
+// ---------- Puente con el programa ----------
+const win = window.CompointShell || null; // Windows (lo pone el programa)
+function nativo(metodo) {
+  try {
+    const C = window.Capacitor;
+    if (!C) return Promise.resolve();
+    if (C.Plugins && C.Plugins.Kiosco && C.Plugins.Kiosco[metodo]) return C.Plugins.Kiosco[metodo]({});
+    if (C.nativePromise) return C.nativePromise('Kiosco', metodo, {});
+  } catch (_) {}
+  return Promise.resolve();
+}
+function kiosco(on) {
+  if (win) { win.kiosco(on); return; }
+  nativo(on ? 'activar' : 'salir').catch(() => {});
+}
+function autoarranque(on) { if (win && win.autoarranque) win.autoarranque(on); }
+
+function leer() { try { return JSON.parse(localStorage.getItem(CONF) || 'null'); } catch (_) { return null; } }
+function guardar(c) { try { c ? localStorage.setItem(CONF, JSON.stringify(c)) : localStorage.removeItem(CONF); } catch (_) {} }
+
+function ver(id) { ['vCodigo', 'vDireccion', 'vMensaje'].forEach((v) => $(v).classList.toggle('oculto', v !== id)); }
+function mensaje(titulo, texto, botones = []) {
+  $('mTitulo').textContent = titulo; $('mTexto').innerHTML = texto; $('mBotones').innerHTML = '';
+  botones.forEach(([t, fn, sec]) => { const b = document.createElement('button'); b.textContent = t; if (sec) b.className = 'sec'; b.onclick = fn; $('mBotones').appendChild(b); });
+  ver('vMensaje');
+}
+function pedirCodigo(error) { ver('vCodigo'); $('eCodigo').textContent = error || ''; setTimeout(() => $('codigo').focus(), 100); }
+function base(url) { return String(url).replace(/[?#].*$/, '').replace(/(terminal|login|index)\.html$/, '').replace(/\/?$/, '/'); }
+
+// ---------- Abrir el sistema ----------
+let reintento = null;
+async function abrir() {
+  clearTimeout(reintento);
+  const c = leer();
+  if (!c) return pedirCodigo();
+  if (c.rol === 'qr' || c.rol === 'checador') kiosco(true);
+  mensaje('Abriendo...', 'Conectando con tu sistema.');
+  try {
+    // ¿Hay internet y el sistema contesta?
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 9000);
+    await fetch(c.url + 'js/config.js?_=' + Date.now(), { mode: 'no-cors', cache: 'no-store', signal: ctl.signal });
+    clearTimeout(t);
+    location.href = c.url + 'terminal.html';
+  } catch (_) {
+    mensaje('Sin conexión', 'No hay internet o el sistema no contesta. Se vuelve a intentar solo en 10 segundos.', [['Reintentar ahora', abrir]]);
+    reintento = setTimeout(abrir, 10000);
+  }
+}
+
+// ---------- Conectar ----------
+['codigo', 'codigo2'].forEach((id) => $(id).addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); }));
+$('fCodigo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const codigo = $('codigo').value;
+  $('eCodigo').textContent = '';
+  if (!/^\d{6}$/.test(codigo)) { $('eCodigo').textContent = 'Escribe los 6 números del código.'; return; }
+  $('bCodigo').disabled = true; $('bCodigo').textContent = 'Buscando tu sistema...';
+  try {
+    // text/plain para que no haga falta permiso previo del navegador (CORS)
+    const r = await fetch(CENTRAL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ accion: 'buscar', codigo }) });
+    const j = await r.json().catch(() => null);
+    if (!j || !j.ok || !j.url) {
+      $('eCodigo').textContent = (j && j.error) || 'Ese código no existe o ya venció. Pide uno nuevo (dura 10 minutos).';
+      return;
+    }
+    location.href = base(j.url) + 'terminal.html?c=' + codigo;
+  } catch (_) {
+    $('eCodigo').textContent = 'Sin internet. Revisa la conexión del equipo e intenta otra vez.';
+  } finally { $('bCodigo').disabled = false; $('bCodigo').textContent = 'Conectar'; }
+});
+$('fDireccion').addEventListener('submit', (e) => {
+  e.preventDefault();
+  $('eDireccion').textContent = '';
+  let d = $('direccion').value.trim().replace(/\s+/g, '');
+  const codigo = $('codigo2').value;
+  if (!d) { $('eDireccion').textContent = 'Escribe la dirección de tu sistema.'; return; }
+  if (!/^\d{6}$/.test(codigo)) { $('eDireccion').textContent = 'Escribe los 6 números del código.'; return; }
+  if (!/^https?:\/\//i.test(d)) d = 'https://' + d;
+  let u;
+  try { u = new URL(d); } catch (_) { $('eDireccion').textContent = 'Esa dirección no es válida.'; return; }
+  location.href = base(u.origin + u.pathname) + 'terminal.html?c=' + codigo;
+});
+$('lDireccion').onclick = () => { ver('vDireccion'); $('codigo2').value = $('codigo').value; $('direccion').focus(); };
+$('lCodigo').onclick = () => pedirCodigo();
+
+// ---------- Arranque: ¿de dónde venimos? ----------
+if (q.get('vinculado')) {
+  // terminal.html ya conectó el equipo: guardar el sistema y su función
+  const url = base(q.get('url') || '');
+  const rol = q.get('rol');
+  if (/^https?:\/\//.test(url) && ['qr', 'checador', 'admin'].includes(rol)) {
+    guardar({ url, rol });
+    autoarranque(rol !== 'admin');
+  }
+  history.replaceState(null, '', location.pathname);
+  abrir();
+} else if (q.get('salir')) {
+  // Cerraron la pantalla con el PIN de salida
+  kiosco(false);
+  history.replaceState(null, '', location.pathname);
+  const c = leer();
+  const botones = [['Volver a abrir', abrir]];
+  botones.push(['Conectar con otro código', () => { guardar(null); autoarranque(false); pedirCodigo(); }, true]);
+  if (win && win.cerrar) botones.push(['Cerrar el programa', () => win.cerrar(), true]);
+  mensaje('Pantalla cerrada', c ? `Este equipo sigue conectado a <b>${c.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</b>.` : '', botones);
+} else if (q.get('sinred')) {
+  history.replaceState(null, '', location.pathname);
+  mensaje('Sin conexión', 'Se perdió el internet. Se vuelve a intentar solo en 10 segundos.', [['Reintentar ahora', abrir]]);
+  reintento = setTimeout(abrir, 10000);
+} else {
+  abrir();
+}
+</script>
+</body>
+</html>

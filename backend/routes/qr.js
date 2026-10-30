@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
-const { verificarToken } = require('../middleware/auth');
+const { verificarToken, permitirTerminal } = require('../middleware/auth');
 const { buscarEmpleadoPorPin } = require('../utils/pin');
 const { registrarChecada } = require('../utils/registro');
 const { guardarDataUrl } = require('../utils/archivos');
@@ -79,15 +79,15 @@ async function tokenVigente(token) {
 }
 
 // Pantalla de la entrada: genera un QR nuevo (requiere sesión iniciada en esa pantalla)
-router.post('/token', verificarToken, async (req, res, next) => {
+router.post('/token', permitirTerminal(['qr']), verificarToken, async (req, res, next) => {
   try {
     const conf = (await pool.query('SELECT qr_vigencia_segundos FROM configuracion WHERE id = 1')).rows[0];
     const segundos = conf?.qr_vigencia_segundos || 25;
     const token = crypto.randomBytes(16).toString('hex');
     // El token vale un poco más que lo que dura en pantalla, para quien lo escaneó al último segundo
     await pool.query(
-      'INSERT INTO qr_tokens (token, expira_en) VALUES ($1, NOW() + make_interval(secs => $2))',
-      [token, segundos + 120]
+      'INSERT INTO qr_tokens (token, expira_en, terminal_id) VALUES ($1, NOW() + make_interval(secs => $2), $3)',
+      [token, segundos + 120, req.terminal ? req.terminal.id : null]
     );
     await pool.query("DELETE FROM qr_tokens WHERE expira_en < NOW() - INTERVAL '1 hour'");
     res.json({ token, segundos });
@@ -150,9 +150,14 @@ router.post('/checar', limitePin, async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Falta la foto de tu rostro. Vuelve a escanear el QR y permite la cámara.' });
     }
     if (fotoValida) { try { fotoUrl = await guardarDataUrl(foto, { maxMb: 2 }); } catch (e) { if (conf.selfie) throw e; } }
+    // ¿En qué terminal estaba el QR que escaneó? (negocios con varias entradas)
+    let terminalId = null;
+    if (token && /^[a-f0-9]{32}$/.test(token)) {
+      terminalId = (await pool.query('SELECT terminal_id FROM qr_tokens WHERE token = $1', [token])).rows[0]?.terminal_id || null;
+    }
     const r = await registrarChecada({
       empleadoId: emp.id, metodo: 'qr', ip: req.ip, fotoUrl, verificadoFacial: false,
-      revision: fotoUrl ? 'pendiente' : null, dispositivoId: dispId
+      revision: fotoUrl ? 'pendiente' : null, dispositivoId: dispId, terminalId
     });
     if (fotoUrl && !emp.foto_url) {
       await pool.query("UPDATE checadas SET revision = 'revisar', revision_motivo = 'Sin foto en el expediente para comparar' WHERE id = $1", [r.id]);
@@ -168,7 +173,7 @@ router.post('/checar', limitePin, async (req, res, next) => {
 });
 
 // Pantalla de la entrada: últimas entradas de hoy con su puntualidad
-router.get('/ultimas', verificarToken, async (req, res, next) => {
+router.get('/ultimas', permitirTerminal(['qr']), verificarToken, async (req, res, next) => {
   try {
     const conf = await config();
     // Entradas de la noche en curso (día de operación: después de medianoche sigue contando la noche anterior)

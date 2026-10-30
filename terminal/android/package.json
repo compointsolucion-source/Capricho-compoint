@@ -1,0 +1,14 @@
+{
+  "name": "compoint-check-terminal-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Compoint Check Terminal para Android (tableta en la entrada: Pantalla QR o checador con PIN y selfie)",
+  "dependencies": {
+    "@capacitor/android": "6.2.2",
+    "@capacitor/core": "6.2.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "6.2.2"
+  }
+}

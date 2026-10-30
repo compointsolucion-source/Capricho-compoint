@@ -10,7 +10,7 @@ router.get('/', (req, res) => {
   res.json({
     control: e.control, bloqueado: e.bloqueado, motivo: e.motivo || null, aviso: e.aviso,
     dias: e.dias ?? null, vence: e.vence || null, paquete: e.paquete || null, paquete_nombre: e.paquete_nombre || null,
-    modulos: e.modulos, max_empleados: e.max_empleados ?? null, contacto: e.contacto || null
+    modulos: e.modulos, max_empleados: e.max_empleados ?? null, max_terminales: e.max_terminales ?? null, contacto: e.contacto || null
   });
 });
 

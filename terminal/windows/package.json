@@ -1,0 +1,34 @@
+{
+  "name": "compoint-check-terminal",
+  "productName": "Compoint Check Terminal",
+  "version": "1.0.0",
+  "description": "Compoint Check Terminal: pantalla QR y tableta checador",
+  "main": "main.js",
+  "author": "Compoint, punto de soluciones",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "mx.com.compoint.check.terminal",
+    "productName": "Compoint Check Terminal",
+    "copyright": "Compoint, punto de soluciones",
+    "files": ["main.js", "preload.js", "icono.png", "www/**/*"],
+    "directories": { "output": "dist" },
+    "win": { "target": "nsis", "icon": "icono.png" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "CompointCheck-Terminal.exe",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Compoint Check Terminal",
+      "runAfterFinish": true
+    }
+  }
+}

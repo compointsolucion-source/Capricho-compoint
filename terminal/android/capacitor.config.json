@@ -1,0 +1,14 @@
+{
+  "appId": "mx.com.compoint.check.terminal",
+  "appName": "Compoint Check Terminal",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0a0c0a"
+  },
+  "appendUserAgent": "CompointTerminal CompointAndroid"
+}

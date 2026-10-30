@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Terminales — Compoint Check</title>
+<style>
+  .term-top { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+  .term-cupo { font-size: 14px; color: var(--muted); }
+  .term-cupo b { color: var(--white); }
+  .descargas { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .descarga { display: flex; gap: 14px; align-items: center; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-panel-2); color: var(--white); text-decoration: none; }
+  .descarga:hover { border-color: var(--neon); }
+  .descarga .ico { font-size: 28px; }
+  .descarga b { display: block; font-size: 14.5px; }
+  .descarga span { font-size: 12.5px; color: var(--muted); }
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .rol { border: 1px solid var(--line); border-radius: 12px; padding: 14px; cursor: pointer; background: var(--bg-panel-2); }
+  .rol input { display: none; }
+  .rol b { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .rol span { font-size: 12.5px; color: var(--muted); line-height: 1.45; display: block; }
+  .rol:has(input:checked) { border-color: var(--neon); background: var(--neon-bg); }
+  .codigo-caja { text-align: center; padding: 26px 18px; }
+  .codigo-num { font-family: var(--font-mono); font-size: 54px; font-weight: 700; letter-spacing: .25em; color: var(--neon); margin: 6px 0 4px; }
+  .codigo-caja ol { text-align: left; max-width: 520px; margin: 18px auto 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .codigo-caja ol b { color: var(--white); }
+  .punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .logo-prev { width: 120px; height: 80px; border-radius: 10px; border: 1px dashed var(--line-bright); display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; color: #777; font-size: 12px; }
+  .logo-prev img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  #bAgregar:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="topbar"><h1>Terminales</h1></div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-body term-top">
+        <div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Computadoras y tabletas de tu negocio</div>
+          <div class="term-cupo" id="cupo">Cargando...</div>
+        </div>
+        <button class="btn-primary inline" id="bAgregar">+ Agregar terminal</button>
+      </div>
+    </div>
+
+    <div class="panel" id="panelForm" style="margin-bottom:20px;display:none;">
+      <div class="panel-head"><h2 id="tituloForm">Agregar terminal</h2></div>
+      <form id="form" class="panel-body">
+        <div class="form-grid cols-2">
+          <div class="field"><label>Nombre</label><input name="nombre" maxlength="80" required placeholder="Ej. Entrada principal, Sucursal Centro"></div>
+          <div class="field"><label>PIN de salida (4 números)</label><input name="pin_salida" inputmode="numeric" maxlength="4" pattern="\d{4}" placeholder="Para cerrar la pantalla completa"></div>
+        </div>
+        <label style="display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:6px 0 10px;">¿Para qué es?</label>
+        <div class="roles">
+          <label class="rol"><input type="radio" name="rol" value="qr" checked><b>📺 Pantalla QR</b><span>En la entrada. Muestra el QR y los muchachos lo escanean con su celular. Saluda a cada uno con su foto.</span></label>
+          <label class="rol"><input type="radio" name="rol" value="checador"><b>📱 Tableta checador</b><span>Para quien no trae celular: escribe su PIN en la tableta y ella toma su selfie.</span></label>
+          <label class="rol"><input type="radio" name="rol" value="admin"><b>🖥️ Panel del administrador</b><span>Abre el sistema normal en esa computadora (pide usuario y contraseña).</span></label>
+        </div>
+        <div class="form-actions" style="margin-top:16px;">
+          <button type="button" class="btn-secondary" id="bCancelar">Cancelar</button>
+          <button class="btn-primary inline" id="bGuardar">Crear y darme el código</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel" id="panelCodigo" style="margin-bottom:20px;display:none;">
+      <div class="codigo-caja">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);" id="cTitulo">Código para conectar</div>
+        <div class="codigo-num" id="cNumero">------</div>
+        <div style="font-size:13px;color:var(--muted);" id="cVence"></div>
+        <ol>
+          <li>En la computadora o tableta, instala <b>Compoint Check Terminal</b> (botones de abajo) o abre <b id="cDireccion"></b> en el navegador.</li>
+          <li>Ábrelo y escribe este código. <span id="cCentral"></span></li>
+          <li>Listo: se queda en pantalla completa. Para cerrarla, mantén presionado el nombre del negocio 3 segundos y escribe el PIN de salida.</li>
+        </ol>
+        <button class="btn-secondary" style="margin-top:16px;" onclick="document.getElementById('panelCodigo').style.display='none'">Ya quedó</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head"><h2>Tus terminales</h2></div>
+      <div id="lista" class="tabla-scroll"><div class="cargando">Cargando...</div></div>
+    </div>
+
+    <div class="grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">
+      <div class="panel">
+        <div class="panel-head"><h2>Descargar el programa</h2></div>
+        <div class="panel-body">
+          <div class="descargas">
+            <a class="descarga" id="dWin" href="#"><span class="ico">🪟</span><div><b>Windows (.exe)</b><span>Para una computadora o pantalla en la entrada</span></div></a>
+            <a class="descarga" id="dApk" href="#"><span class="ico">🤖</span><div><b>Android (APK)</b><span>Para una tableta en la entrada</span></div></a>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.5;">La primera vez, Windows puede mostrar “Windows protegió su PC”: da clic en <b>Más información → Ejecutar de todas formas</b>. En Android, permite instalar desde el navegador cuando lo pida.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Logo de tu negocio</h2></div>
+        <div class="panel-body" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+          <div class="logo-prev" id="logoPrev">Sin logo</div>
+          <div>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 10px;">Sale arriba en las pantallas de tus terminales.</p>
+            <label class="btn-secondary" style="cursor:pointer;display:inline-block;">Subir logo<input type="file" accept="image/png,image/jpeg,image/webp" id="logoArchivo" style="display:none;"></label>
+            <button class="btn-mini" id="bQuitarLogo" style="margin-left:6px;display:none;">Quitar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+iniciarPanel({ soloAdmin: true });
+// Instaladores: se compilan solos en GitHub cada vez que cambia el programa
+const DESCARGA = 'https://github.com/compointsolucion-source/Capricho-compoint/releases/latest/download/';
+document.getElementById('dWin').href = DESCARGA + 'CompointCheck-Terminal.exe';
+document.getElementById('dApk').href = DESCARGA + 'CompointCheck-Terminal.apk';
+const DIRECCION = location.host + location.pathname.replace(/terminales\.html$/, 'terminal.html');
+let D = null, editando = null, relojCodigo = null;
+
+async function cargar() {
+  try {
+    D = await api('/terminales');
+    const n = D.terminales.length;
+    document.getElementById('cupo').innerHTML = D.limite === null
+      ? `<b>${n}</b> terminal${n === 1 ? '' : 'es'}${D.paquete_nombre ? ` · tu paquete <b>${esc(D.paquete_nombre)}</b> no tiene límite` : ''}`
+      : `<b>${n} de ${D.limite}</b> terminal${D.limite === 1 ? '' : 'es'} de tu paquete <b>${esc(D.paquete_nombre || '')}</b>${n >= D.limite ? ' · para agregar más, pide a Compoint cambiar de paquete' : ''}`;
+    document.getElementById('bAgregar').disabled = D.limite !== null && n >= D.limite;
+    pintarLista();
+    pintarLogo();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function estado(t) {
+  if (t.en_linea) return '<span class="punto" style="background:var(--neon)"></span>En línea';
+  if (t.codigo_vigente && !t.conectada) return '<span class="punto" style="background:var(--amber)"></span>Esperando el código';
+  if (!t.conectada) return '<span class="punto" style="background:var(--muted-2)"></span>Sin conectar';
+  return `<span class="punto" style="background:var(--red)"></span>Apagada${t.ultimo_contacto ? ` desde ${fechaHora(t.ultimo_contacto)}` : ''}`;
+}
+function equipo(d) {
+  if (!d) return '—';
+  if (/CompointWindows/.test(d)) return 'Programa de Windows';
+  if (/CompointAndroid|Android/.test(d)) return 'Tableta Android';
+  if (/Windows/.test(d)) return 'Navegador en Windows';
+  return 'Navegador';
+}
+function pintarLista() {
+  const l = document.getElementById('lista');
+  if (!D.terminales.length) { l.innerHTML = '<div class="vacio" style="padding:26px;text-align:center;color:var(--muted);">Todavía no tienes terminales. Da clic en <b>+ Agregar terminal</b>.</div>'; return; }
+  l.innerHTML = `<table class="checadas"><thead><tr><th>Nombre</th><th>Para qué</th><th>Estado</th><th>Equipo</th><th>Acciones</th></tr></thead><tbody>
+    ${D.terminales.map((t) => `<tr>
+      <td><b>${esc(t.nombre)}</b></td>
+      <td>${esc(t.rol_nombre)}</td>
+      <td style="white-space:nowrap;">${estado(t)}</td>
+      <td style="font-size:12.5px;color:var(--muted);">${equipo(t.descripcion)}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn-mini" onclick="codigo(${t.id})">${t.conectada ? 'Cambiar de equipo' : 'Código'}</button>
+        <button class="btn-mini" onclick="editar(${t.id})">Editar</button>
+        <button class="btn-mini" style="color:var(--red);" onclick="quitar(${t.id})">Quitar</button>
+      </td></tr>`).join('')}</tbody></table>`;
+}
+
+function abrirForm(t) {
+  editando = t ? t.id : null;
+  const f = document.getElementById('form');
+  f.reset();
+  f.nombre.value = t ? t.nombre : '';
+  f.querySelector(`input[name=rol][value=${t ? t.rol : 'qr'}]`).checked = true;
+  f.pin_salida.placeholder = t && t.tiene_pin ? 'Déjalo vacío para no cambiarlo' : 'Para cerrar la pantalla completa';
+  document.getElementById('tituloForm').textContent = t ? `Editar: ${t.nombre}` : 'Agregar terminal';
+  document.getElementById('bGuardar').textContent = t ? 'Guardar' : 'Crear y darme el código';
+  document.getElementById('panelForm').style.display = '';
+  f.nombre.focus();
+}
+document.getElementById('bAgregar').onclick = () => abrirForm(null);
+document.getElementById('bCancelar').onclick = () => { document.getElementById('panelForm').style.display = 'none'; };
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = { nombre: f.nombre.value, rol: f.rol.value, pin_salida: f.pin_salida.value };
+  try {
+    if (editando) { await api(`/terminales/${editando}`, { method: 'PUT', body }); toast('Terminal guardada ✓'); }
+    else { const r = await api('/terminales', { method: 'POST', body }); mostrarCodigo(r, body.nombre); }
+    document.getElementById('panelForm').style.display = 'none';
+    cargar();
+  } catch (err) { toast(err.message, 'error'); }
+});
+function editar(id) { abrirForm(D.terminales.find((t) => t.id === id)); }
+async function codigo(id) {
+  const t = D.terminales.find((x) => x.id === id);
+  if (t.conectada && !(await preguntar('Cambiar de equipo', `Con el código nuevo puedes conectar <b>${esc(t.nombre)}</b> en otra computadora o tableta. El equipo de ahora se desconecta en cuanto se use el código.`, { boton: 'Darme el código' }))) return;
+  try { mostrarCodigo(await api(`/terminales/${id}/codigo`, { method: 'POST' }), t.nombre); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+async function quitar(id) {
+  const t = D.terminales.find((x) => x.id === id);
+  if (!(await preguntar('Quitar terminal', `<b>${esc(t.nombre)}</b> se desconecta al instante y deja de mostrar el QR. Las checadas que ya hizo se conservan.`, { boton: 'Quitar', peligro: true }))) return;
+  try { await api(`/terminales/${id}`, { method: 'DELETE' }); toast('Terminal quitada'); cargar(); } catch (e) { toast(e.message, 'error'); }
+}
+function mostrarCodigo(r, nombre) {
+  document.getElementById('panelCodigo').style.display = '';
+  document.getElementById('cTitulo').textContent = `Código para conectar “${nombre}”`;
+  document.getElementById('cNumero').textContent = r.codigo;
+  document.getElementById('cDireccion').textContent = DIRECCION;
+  document.getElementById('cCentral').innerHTML = r.central ? '' : `Si te pide la dirección, escribe <b>${esc(location.host)}</b>.`;
+  const fin = new Date(r.vence).getTime();
+  clearInterval(relojCodigo);
+  const tic = () => {
+    const s = Math.max(0, Math.round((fin - Date.now()) / 1000));
+    document.getElementById('cVence').textContent = s ? `Vale ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} minutos más, y solo una vez.` : 'Este código ya venció. Pide otro.';
+    if (!s) clearInterval(relojCodigo);
+  };
+  tic(); relojCodigo = setInterval(tic, 1000);
+  document.getElementById('panelCodigo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// El logo se guarda en PNG para respetar el fondo transparente
+function leerLogo(f) {
+  if (!f) return Promise.resolve(null);
+  return new Promise((ok, mal) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      ok(c.toDataURL('image/png'));
+    };
+    img.onerror = () => mal(new Error('Esa imagen no se pudo abrir. Usa PNG o JPG.'));
+    img.src = URL.createObjectURL(f);
+  });
+}
+function pintarLogo() {
+  const p = document.getElementById('logoPrev');
+  p.innerHTML = D.logo_url ? `<img src="${esc(urlArchivo(D.logo_url))}" alt="Logo">` : 'Sin logo';
+  document.getElementById('bQuitarLogo').style.display = D.logo_url ? '' : 'none';
+}
+document.getElementById('logoArchivo').addEventListener('change', async (e) => {
+  try {
+    const logo = await leerLogo(e.target.files[0]);
+    if (!logo) return;
+    await api('/terminales/logo', { method: 'PUT', body: { logo } });
+    toast('Logo guardado ✓'); cargar();
+  } catch (err) { toast(err.message, 'error'); }
+  e.target.value = '';
+});
+document.getElementById('bQuitarLogo').onclick = async () => {
+  try { await api('/terminales/logo', { method: 'PUT', body: { logo: null } }); cargar(); } catch (e) { toast(e.message, 'error'); }
+};
+
+cargar();
+setInterval(cargar, 30000);
+</script>
+</body>
+</html>

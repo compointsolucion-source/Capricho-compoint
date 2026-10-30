@@ -21,7 +21,7 @@ router.get('/archivos/:id', async (req, res, next) => {
 
 router.use(verificarToken, requiereAdmin);
 
-const TABLAS = ['configuracion', 'configuracion_smtp', 'horarios', 'empleados', 'administradores', 'checadas',
+const TABLAS = ['configuracion', 'configuracion_smtp', 'horarios', 'empleados', 'administradores', 'terminales', 'checadas',
   'qr_tokens', 'dias_festivos', 'incidencias', 'auditoria_checadas', 'archivos',
   'conceptos_gasto', 'cortes', 'gastos', 'bonos_extra', 'nomina_pagos', 'auditoria_finanzas', 'dispositivos'];
 

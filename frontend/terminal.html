@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="icon" type="image/png" href="img/logo.png">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Terminal — Compoint Check</title>
+<script src="js/vendor/qrcode-generator.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  .t-pantalla { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px;
+    background: radial-gradient(ellipse 900px 500px at 50% 0%, var(--neon-bg), transparent 60%), var(--bg); }
+  .t-pantalla.activa { display: flex; }
+  .t-marca { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 18px; min-height: 64px; cursor: default; }
+  .t-marca img { max-height: 72px; max-width: 260px; object-fit: contain; border-radius: 10px; background: #fff; padding: 6px; }
+  .t-marca .nombre { font-size: 24px; font-weight: 700; letter-spacing: .02em; }
+  .t-pie { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); letter-spacing: .08em; }
+  .t-pie b { color: var(--neon); font-weight: 600; }
+  .t-reloj { font-family: var(--font-mono); font-size: 44px; font-weight: 600; color: var(--white); margin-bottom: 6px; }
+  .t-fecha { color: var(--muted); font-size: 14px; margin-bottom: 22px; }
+  .t-h1 { font-size: 18px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 0 0 22px; }
+  .t-estado { margin-top: 18px; color: var(--amber); font-size: 15px; min-height: 22px; max-width: 520px; }
+  /* Conectar */
+  .t-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 18px; padding: 30px 28px; width: 420px; max-width: 92vw; }
+  .t-card h1 { font-size: 22px; margin: 0 0 6px; }
+  .t-card p { color: var(--muted); font-size: 14px; margin: 0 0 20px; line-height: 1.5; }
+  .t-codigo { width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 38px; letter-spacing: .35em; text-align: center; padding: 14px 8px 14px 22px;
+    background: var(--bg); color: var(--white); border: 1px solid var(--line-bright); border-radius: 12px; outline: none; }
+  .t-codigo:focus { border-color: var(--neon); box-shadow: 0 0 0 3px var(--neon-bg); }
+  .t-btn { margin-top: 16px; width: 100%; padding: 15px; font-size: 16px; font-weight: 700; border: 0; border-radius: 12px; background: var(--neon); color: #06110a; cursor: pointer; }
+  .t-btn:disabled { opacity: .6; }
+  .t-btn.sec { background: transparent; color: var(--white); border: 1px solid var(--line-bright); font-weight: 600; }
+  .t-error { color: var(--red); font-size: 14px; margin-top: 12px; min-height: 20px; }
+  /* Tableta checador */
+  .t-checador { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 380px); gap: 34px; align-items: center; width: min(1000px, 96vw); }
+  .t-cam { position: relative; aspect-ratio: 4 / 3; border-radius: 18px; overflow: hidden; background: #000; border: 1px solid var(--line-bright); }
+  .t-cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .t-cam .sin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; padding: 20px; }
+  .t-pin-puntos { display: flex; justify-content: center; gap: 16px; margin: 6px 0 18px; }
+  .t-pin-puntos span { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line-bright); }
+  .t-pin-puntos span.lleno { background: var(--neon); border-color: var(--neon); }
+  .t-teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .t-teclado button { font-family: var(--font-mono); font-size: 30px; font-weight: 600; padding: 18px 0; border-radius: 14px; border: 1px solid var(--line-bright); background: var(--bg-panel); color: var(--white); cursor: pointer; }
+  .t-teclado button:active { background: var(--neon-bg); border-color: var(--neon); }
+  .t-teclado button.mini { font-size: 15px; font-family: var(--font-body); color: var(--muted); }
+  @media (max-width: 760px) { .t-checador { grid-template-columns: 1fr; gap: 18px; } .t-cam { max-height: 34vh; } .t-reloj { font-size: 34px; } }
+  /* Saludo */
+  .t-saludo { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.72); z-index: 50; }
+  .t-saludo.ver { display: flex; animation: aparecer .25s ease-out; }
+  .t-saludo .caja { background: var(--bg-panel); border: 2px solid var(--neon); border-radius: 22px; padding: 30px 40px; text-align: center; min-width: 320px; max-width: 90vw; box-shadow: 0 0 80px var(--neon-glow); }
+  .t-saludo.salida .caja { border-color: #4ea8f7; box-shadow: 0 0 80px rgba(78,168,247,.35); }
+  .t-saludo.error .caja { border-color: var(--red); box-shadow: 0 0 80px rgba(247,106,106,.3); }
+  .t-saludo img { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 3px solid var(--line-bright); margin-bottom: 14px; background: #222; }
+  .t-saludo .grande { font-size: 30px; font-weight: 700; margin-bottom: 6px; }
+  .t-saludo .detalle { font-family: var(--font-mono); font-size: 18px; color: var(--muted); }
+  @keyframes aparecer { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+  /* Salir */
+  .t-modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.75); z-index: 60; }
+  .t-modal.ver { display: flex; }
+</style>
+</head>
+<body>
+
+<!-- 1. Conectar este equipo con el código del administrador -->
+<section class="t-pantalla" id="pConectar">
+  <div class="t-card">
+    <div class="logo-chip" style="margin-bottom:18px;display:inline-flex;"><img src="img/logo.png" alt="Compoint" style="height:44px;"></div>
+    <h1>Conectar este equipo</h1>
+    <p>En el sistema, el administrador entra a <b>Terminales → Agregar terminal</b> y te da un código de 6 números. Escríbelo aquí.</p>
+    <form id="fConectar" autocomplete="off">
+      <input class="t-codigo" id="codigo" inputmode="numeric" maxlength="6" placeholder="000000" autofocus>
+      <button class="t-btn" id="bConectar">Conectar</button>
+      <div class="t-error" id="eConectar"></div>
+    </form>
+  </div>
+</section>
+
+<!-- 2. Pantalla QR de la entrada -->
+<section class="t-pantalla" id="pQr">
+  <div class="t-marca" data-salir></div>
+  <div class="t-reloj" data-reloj>--:--:--</div>
+  <div class="t-fecha" data-fecha></div>
+  <h2 class="t-h1">Escanea para registrar tu entrada o salida</h2>
+  <div class="qr-box" id="qrcode"></div>
+  <div class="qr-barra" style="width:340px;max-width:80vw;"><span id="barra" style="width:100%"></span></div>
+  <div class="t-estado" id="estadoQr"></div>
+  <div id="ultimas" style="margin-top:14px;width:360px;max-width:90vw;text-align:left;"></div>
+</section>
+
+<!-- 3. Tableta checador: PIN + selfie -->
+<section class="t-pantalla" id="pChecador">
+  <div class="t-marca" data-salir></div>
+  <div class="t-checador">
+    <div>
+      <div class="t-reloj" data-reloj>--:--:--</div>
+      <div class="t-fecha" data-fecha></div>
+      <div class="t-cam"><video id="video" autoplay playsinline muted></video><div class="sin" id="sinCam">Encendiendo la cámara...</div></div>
+    </div>
+    <div>
+      <h2 class="t-h1" style="margin-bottom:10px;">Escribe tu PIN</h2>
+      <div class="t-pin-puntos" id="puntos"><span></span><span></span><span></span><span></span></div>
+      <div class="t-teclado" id="teclado"></div>
+      <div class="t-estado" id="estadoChec"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Mensajes: sin conexión, desconectada, cerrada -->
+<section class="t-pantalla" id="pMensaje">
+  <div class="t-card">
+    <h1 id="mTitulo"></h1>
+    <p id="mTexto"></p>
+    <div id="mBotones"></div>
+  </div>
+</section>
+
+<div class="t-pie">COMPOINT <b>CHECK</b> · compoint.com.mx</div>
+
+<div class="t-saludo" id="saludo"><div class="caja"><img id="sFoto" alt=""><div class="grande" id="sTitulo"></div><div class="detalle" id="sDetalle"></div></div></div>
+
+<div class="t-modal" id="mSalir">
+  <div class="t-card" style="text-align:center;">
+    <h1>Cerrar la pantalla</h1>
+    <p>Escribe el PIN de salida de esta terminal.</p>
+    <form id="fSalir" autocomplete="off">
+      <input class="t-codigo" id="pinSalir" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
+      <button class="t-btn">Cerrar</button>
+      <button type="button" class="t-btn sec" id="bCancelarSalir">Cancelar</button>
+      <div class="t-error" id="eSalir"></div>
+    </form>
+  </div>
+</div>
+
+<script>window.CC_TOKEN_KEY = 'cc_terminal';</script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/verificador.js"></script>
+<script>
+// Pantalla de las terminales del negocio (programa de Windows, app de Android o cualquier navegador).
+// El equipo se conecta UNA vez con un código de 6 números; después abre directo su función.
+const LLAVE = 'cc_terminal';
+const EN_APP = /CompointTerminal/.test(navigator.userAgent);   // dentro del programa de Windows o la app de Android
+const APP = 'https://localhost/';                               // pantalla propia de la app (la intercepta el programa)
+const $ = (id) => document.getElementById(id);
+let T = null; // datos de esta terminal
+
+function mostrar(id) { document.querySelectorAll('.t-pantalla').forEach((p) => p.classList.toggle('activa', p.id === id)); }
+function mensaje(titulo, texto, botones = []) {
+  $('mTitulo').textContent = titulo; $('mTexto').innerHTML = texto;
+  $('mBotones').innerHTML = '';
+  botones.forEach(([txt, fn, sec]) => { const b = document.createElement('button'); b.className = 't-btn' + (sec ? ' sec' : ''); b.textContent = txt; b.onclick = fn; $('mBotones').appendChild(b); });
+  mostrar('pMensaje');
+}
+function guardarLlave(t) { try { t ? localStorage.setItem(LLAVE, t) : localStorage.removeItem(LLAVE); } catch (_) {} }
+function llave() { try { return localStorage.getItem(LLAVE); } catch (_) { return null; } }
+function base() { return location.href.replace(/[?#].*$/, '').replace(/terminal\.html$/, ''); }
+
+// ---------- Conectar ----------
+$('codigo').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); });
+$('fConectar').addEventListener('submit', (e) => { e.preventDefault(); conectar($('codigo').value); });
+async function conectar(codigo) {
+  $('eConectar').textContent = '';
+  if (!/^\d{6}$/.test(codigo)) { $('eConectar').textContent = 'Escribe los 6 números del código.'; return; }
+  $('bConectar').disabled = true; $('bConectar').textContent = 'Conectando...';
+  try {
+    const r = await api('/terminales/vincular', { method: 'POST', body: { codigo }, tokenKey: '__ninguna__' });
+    guardarLlave(r.token);
+    if (EN_APP) { location.href = `${APP}?vinculado=1&rol=${encodeURIComponent(r.rol)}&url=${encodeURIComponent(base())}`; return; }
+    history.replaceState(null, '', 'terminal.html');
+    iniciar();
+  } catch (err) {
+    mostrar('pConectar');
+    $('eConectar').textContent = err.message;
+  } finally { $('bConectar').disabled = false; $('bConectar').textContent = 'Conectar'; }
+}
+
+// ---------- Arranque ----------
+async function iniciar() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('c')) { history.replaceState(null, '', 'terminal.html'); mostrar('pConectar'); $('codigo').value = q.get('c'); return conectar(q.get('c').replace(/\D/g, '')); }
+  if (!llave()) { mostrar('pConectar'); setTimeout(() => $('codigo').focus(), 100); return; }
+  try {
+    T = await api('/terminales/yo', { sinRedirigir: true });
+  } catch (err) {
+    if (/desconectad|no está conectado/i.test(err.message)) {
+      guardarLlave(null);
+      return mensaje('Este equipo se desconectó', 'El administrador lo quitó de <b>Terminales</b> o lo cambió por otro. Pide un código nuevo para conectarlo otra vez.',
+        [['Escribir código nuevo', () => { mostrar('pConectar'); $('codigo').focus(); }]]);
+    }
+    mensaje('Sin conexión', 'No hay internet o el sistema no contesta. Se vuelve a intentar solo en 10 segundos...');
+    setTimeout(iniciar, 10000);
+    return;
+  }
+  document.title = `${T.nombre} — Compoint Check`;
+  pintarMarca();
+  if (T.rol === 'admin') { location.href = 'login.html'; return; }
+  if (T.rol === 'qr') { mostrar('pQr'); iniciarQr(); }
+  if (T.rol === 'checador') { mostrar('pChecador'); iniciarChecador(); }
+  setInterval(reloj, 1000); reloj();
+  iniciarVerificador(15);          // compara las selfies con el expediente en segundo plano
+  pantallaEncendida();
+  setInterval(revisarTerminal, 60000); // si la quitan desde el panel, se entera en menos de un minuto
+}
+function pintarMarca() {
+  document.querySelectorAll('.t-marca').forEach((m) => {
+    m.innerHTML = T.logo_url ? `<img src="${esc(urlArchivo(T.logo_url))}" alt="">` : '';
+    m.innerHTML += `<span class="nombre">${esc(T.empresa_nombre || 'Mi negocio')}</span>`;
+  });
+}
+async function revisarTerminal() {
+  try { const r = await api('/terminales/yo', { sinRedirigir: true }); if (r.logo_url !== T.logo_url || r.empresa_nombre !== T.empresa_nombre) { T = r; pintarMarca(); } }
+  catch (err) { if (/desconectad|no está conectado/i.test(err.message)) location.reload(); }
+}
+function reloj() {
+  const d = new Date();
+  document.querySelectorAll('[data-reloj]').forEach((x) => { x.textContent = d.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour12: false }); });
+  const f = d.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', weekday: 'long', day: 'numeric', month: 'long' });
+  document.querySelectorAll('[data-fecha]').forEach((x) => { x.textContent = f.charAt(0).toUpperCase() + f.slice(1); });
+}
+function pantallaEncendida() {
+  if (!('wakeLock' in navigator)) return;
+  const pedir = () => navigator.wakeLock.request('screen').catch(() => {});
+  pedir();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pedir(); });
+}
+
+// ---------- Pantalla QR ----------
+let segundos = 25, restante = 0, ultimoId = null;
+async function renovarQr() {
+  try {
+    const r = await api('/qr/token', { method: 'POST', sinRedirigir: true });
+    segundos = r.segundos; restante = segundos;
+    const q = qrcode(0, 'M');
+    q.addData(`${base()}checar.html?t=${r.token}`);
+    q.make();
+    const lado = Math.min(320, Math.floor(window.innerHeight * 0.36));
+    const celda = Math.max(2, Math.floor(lado / q.getModuleCount()));
+    $('qrcode').innerHTML = q.createSvgTag({ cellSize: celda, margin: 0, scalable: false });
+    $('estadoQr').textContent = '';
+  } catch (e) {
+    const pausa = /suscripción|pausa/i.test(e.message);
+    $('estadoQr').textContent = pausa ? e.message : 'Sin conexión con el servidor. Reintentando...';
+    if (pausa) $('qrcode').innerHTML = '';
+    if (/desconectad/i.test(e.message)) return location.reload();
+    restante = pausa ? 60 : 5;
+  }
+}
+function ticQr() {
+  restante--;
+  $('barra').style.width = `${Math.max(restante, 0) / segundos * 100}%`;
+  if (restante <= 0) renovarQr();
+}
+async function ultimas() {
+  try {
+    const l = await api('/qr/ultimas', { sinRedirigir: true });
+    $('ultimas').innerHTML = l.length ? `<div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;text-align:center;">Últimas entradas</div>
+      <div class="panel" style="padding:4px 14px;">${l.slice(0, 4).map((x) => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px;">
+        <span>${esc(x.nombre)}</span><span style="font-family:var(--font-mono);color:${x.a_tiempo === false ? 'var(--amber)' : 'var(--neon)'}">${String(x.hora).slice(0, 5)} ${x.a_tiempo === false ? '· ' + x.min_tarde + ' min tarde' : x.a_tiempo ? '✓ a tiempo' : ''}</span></div>`).join('')}</div>` : '';
+  } catch (_) {}
+}
+// Saludo: cada checada nueva aparece en grande con su foto y un sonido
+async function recientes() {
+  try {
+    const r = await api('/terminales/recientes' + (ultimoId === null ? '' : `?desde=${ultimoId}`), { sinRedirigir: true });
+    const nuevas = ultimoId === null ? [] : r.lista;
+    ultimoId = r.ultimo_id;
+    for (const c of nuevas) { await saludar(c); }
+    if (nuevas.length) ultimas();
+  } catch (_) {}
+}
+function iniciarQr() {
+  renovarQr(); setInterval(ticQr, 1000);
+  ultimas(); setInterval(ultimas, 20000);
+  recientes(); setInterval(recientes, 3000);
+}
+
+// ---------- Tableta checador ----------
+let pin = '', ocupado = false, flujo = null;
+function iniciarChecador() {
+  const t = $('teclado');
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Borrar', '0', 'Limpiar'].forEach((k) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = k;
+    if (k.length > 1) b.className = 'mini';
+    b.onclick = () => tecla(k); t.appendChild(b);
+  });
+  document.addEventListener('keydown', (e) => {
+    if ($('mSalir').classList.contains('ver')) return;
+    if (/^\d$/.test(e.key)) tecla(e.key); else if (e.key === 'Backspace') tecla('Borrar'); else if (e.key === 'Escape') tecla('Limpiar');
+  });
+  encenderCamara();
+}
+async function encenderCamara() {
+  try {
+    flujo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    $('video').srcObject = flujo; $('sinCam').style.display = 'none';
+  } catch (_) {
+    $('sinCam').textContent = T.selfie ? 'No se pudo encender la cámara. Revisa que la tableta tenga permiso de cámara para esta app.' : 'Sin cámara (no es obligatoria la selfie).';
+    setTimeout(encenderCamara, 15000);
+  }
+}
+function pintarPin() { $('puntos').querySelectorAll('span').forEach((s, i) => s.classList.toggle('lleno', i < pin.length)); }
+function tecla(k) {
+  if (ocupado) return;
+  if (k === 'Borrar') pin = pin.slice(0, -1); else if (k === 'Limpiar') pin = ''; else if (pin.length < 4) pin += k;
+  pintarPin();
+  if (pin.length === 4) checar();
+}
+function foto() {
+  const v = $('video');
+  if (!flujo || !v.videoWidth) return null;
+  const c = document.createElement('canvas');
+  const w = 480; c.width = w; c.height = Math.round(v.videoHeight / v.videoWidth * w);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+async function checar() {
+  ocupado = true; $('estadoChec').textContent = 'Registrando...';
+  try {
+    const r = await api('/terminales/checar', { method: 'POST', body: { pin, foto: foto() }, sinRedirigir: true });
+    $('estadoChec').textContent = '';
+    await saludar({ nombre: r.empleado, tipo: r.tipo, hora: r.hora, foto_url: r.foto_url, puntualidad: r.puntualidad });
+  } catch (e) {
+    $('estadoChec').textContent = '';
+    if (/desconectad/i.test(e.message)) return location.reload();
+    await saludar({ error: e.message });
+  } finally { pin = ''; pintarPin(); ocupado = false; }
+}
+
+// ---------- Saludo con sonido ----------
+let audio = null;
+function sonar(ok) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const notas = ok ? [880, 1320] : [300, 220];
+    notas.forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = f; o.type = 'sine'; o.connect(g); g.connect(audio.destination);
+      const t0 = audio.currentTime + i * 0.16;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+      o.start(t0); o.stop(t0 + 0.16);
+    });
+  } catch (_) {}
+}
+function saludar(c) {
+  return new Promise((listo) => {
+    const s = $('saludo');
+    s.className = 't-saludo ver' + (c.error ? ' error' : c.tipo === 'salida' ? ' salida' : '');
+    const nombre = String(c.nombre || '').split(' ')[0];
+    $('sFoto').style.display = c.foto_url ? '' : 'none';
+    if (c.foto_url) $('sFoto').src = urlArchivo(c.foto_url);
+    if (c.error) { $('sTitulo').textContent = '✗ No se registró'; $('sDetalle').textContent = c.error; }
+    else {
+      $('sTitulo').textContent = c.tipo === 'salida' ? `¡Hasta luego, ${nombre}!` : `¡Bienvenido, ${nombre}!`;
+      const p = c.puntualidad;
+      $('sDetalle').textContent = `${c.tipo === 'salida' ? 'Salida' : 'Entrada'} · ${String(c.hora).slice(0, 5)}` +
+        (p && p.a_tiempo === true ? ' · ✓ a tiempo' : p && p.a_tiempo === false ? ` · ${p.min_tarde} min tarde` : '');
+    }
+    sonar(!c.error);
+    setTimeout(() => { s.className = 't-saludo'; listo(); }, c.error ? 3500 : 2800);
+  });
+}
+
+// ---------- Cerrar la pantalla (PIN de salida) ----------
+// Se abre manteniendo presionado el nombre del negocio 3 segundos, o con Ctrl+Shift+Q en Windows.
+window.ccPedirSalida = function () {
+  if (!T) { if (EN_APP) location.href = `${APP}?salir=1`; return; }
+  $('eSalir').textContent = ''; $('pinSalir').value = '';
+  $('mSalir').classList.add('ver'); setTimeout(() => $('pinSalir').focus(), 50);
+};
+document.querySelectorAll('[data-salir]').forEach((m) => {
+  let timer = null;
+  const ini = (e) => { e.preventDefault(); timer = setTimeout(window.ccPedirSalida, 3000); };
+  const fin = () => clearTimeout(timer);
+  m.addEventListener('mousedown', ini); m.addEventListener('touchstart', ini, { passive: false });
+  ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach((ev) => m.addEventListener(ev, fin));
+});
+document.addEventListener('keydown', (e) => { if (e.ctrlKey && e.shiftKey && (e.key === 'Q' || e.key === 'q')) window.ccPedirSalida(); });
+$('bCancelarSalir').onclick = () => $('mSalir').classList.remove('ver');
+$('fSalir').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/terminales/salir', { method: 'POST', body: { pin: $('pinSalir').value }, sinRedirigir: true });
+    $('mSalir').classList.remove('ver');
+    if (flujo) flujo.getTracks().forEach((t) => t.stop());
+    if (EN_APP) { location.href = `${APP}?salir=1`; return; }
+    mensaje('Pantalla cerrada', `Terminal <b>${esc(T.nombre)}</b>.`, [
+      ['Volver a abrir', () => location.reload()],
+      ['Desconectar este equipo', () => { guardarLlave(null); location.reload(); }, true]
+    ]);
+  } catch (err) { $('eSalir').textContent = err.message; }
+});
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+iniciar();
+</script>
+</body>
+</html>

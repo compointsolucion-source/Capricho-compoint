@@ -11,7 +11,7 @@ const TEMAS = ['oscuro-neon', 'oscuro-azul', 'claro-corporativo', 'claro-moderno
 // Pública: tema y nombre (para pintar el login y la pantalla del celular)
 router.get('/publica', async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT empresa_nombre, tema FROM configuracion WHERE id = 1');
+    const { rows } = await pool.query('SELECT empresa_nombre, tema, logo_url FROM configuracion WHERE id = 1');
     res.json(rows[0] || { empresa_nombre: 'Compoint', tema: 'oscuro-neon' });
   } catch (e) { next(e); }
 });

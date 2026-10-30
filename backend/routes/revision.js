@@ -1,12 +1,13 @@
 const express = require('express');
 const pool = require('../db');
-const { verificarToken, requiereAdmin } = require('../middleware/auth');
+const { verificarToken, requiereAdmin, permitirTerminal } = require('../middleware/auth');
 
 // Revisión del rostro de las checadas. La comparación la hacen las pantallas del
 // panel (pantalla QR, dashboard, checadas, empleados) en segundo plano, así el
 // celular del empleado no tiene que descargar ni procesar nada pesado.
 const router = express.Router();
-router.use(verificarToken);
+// Las terminales (pantalla QR y tableta) también comparan rostros en segundo plano
+router.use(permitirTerminal(['qr', 'checador']), verificarToken);
 
 const esDescriptor = (d) => Array.isArray(d) && d.length === 128 && d.every((x) => typeof x === 'number' && isFinite(x) && Math.abs(x) < 10);
 const distancia = (a, b) => Math.sqrt(a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0));

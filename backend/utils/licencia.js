@@ -13,9 +13,9 @@ const URL_LICENCIA = process.env.COMPOINT_LICENCIA_URL || 'https://www.compoint.
 const CONTACTO = 'Compoint · WhatsApp 33 2590 7090';
 
 const PAQUETES = {
-  basico: { nombre: 'Check Básico', modulos: ['checador'], max_empleados: 10 },
-  nomina: { nombre: 'Check Nómina', modulos: ['checador', 'nomina'], max_empleados: 25 },
-  total: { nombre: 'Check Total', modulos: ['checador', 'nomina', 'finanzas'], max_empleados: null }
+  basico: { nombre: 'Check Básico', modulos: ['checador'], max_empleados: 10, max_terminales: 1 },
+  nomina: { nombre: 'Check Nómina', modulos: ['checador', 'nomina'], max_empleados: 25, max_terminales: 3 },
+  total: { nombre: 'Check Total', modulos: ['checador', 'nomina', 'finanzas'], max_empleados: null, max_terminales: null }
 };
 
 let guardada = null;      // última respuesta firmada y verificada
@@ -71,11 +71,11 @@ function diasEntre(a, b) {
 // Estado actual, listo para usarse (no hace llamadas de red).
 function estado() {
   const todo = ['checador', 'nomina', 'finanzas'];
-  if (!TOKEN) return { control: false, bloqueado: false, aviso: false, modulos: todo, max_empleados: null };
+  if (!TOKEN) return { control: false, bloqueado: false, aviso: false, modulos: todo, max_empleados: null, max_terminales: null };
   const g = guardada;
   // Todavía no hay respuesta (sistema recién creado): funciona normal mientras llega
-  if (!g) return { control: true, pendiente: true, bloqueado: false, aviso: false, modulos: todo, max_empleados: null, contacto: CONTACTO };
-  if (!g.control) return { control: false, bloqueado: false, aviso: false, modulos: todo, max_empleados: null };
+  if (!g) return { control: true, pendiente: true, bloqueado: false, aviso: false, modulos: todo, max_empleados: null, max_terminales: null, contacto: CONTACTO };
+  if (!g.control) return { control: false, bloqueado: false, aviso: false, modulos: todo, max_empleados: null, max_terminales: null };
   const p = PAQUETES[g.paquete] || null;
   const hoy = ahora().fecha;
   const dias = g.vence ? diasEntre(hoy, g.vence) : null;
@@ -87,6 +87,7 @@ function estado() {
     paquete: g.paquete, paquete_nombre: p ? p.nombre : null,
     modulos: p ? p.modulos : todo,
     max_empleados: g.max_empleados !== null ? g.max_empleados : (p ? p.max_empleados : null),
+    max_terminales: p ? p.max_terminales : null,
     contacto: CONTACTO
   };
 }
@@ -105,4 +106,10 @@ async function revisarAhora() {
   return consultar();
 }
 
-module.exports = { iniciar, estado, revisarAhora, cargar, PAQUETES, _consultar: consultar };
+// Datos para dar de alta códigos de terminal en compoint.com.mx (solo sistemas de clientes)
+function central() {
+  if (!TOKEN) return null;
+  return { token: TOKEN, url: URL_LICENCIA.replace(/licencia\.php(\?.*)?$/, 'terminal.php') };
+}
+
+module.exports = { iniciar, estado, revisarAhora, cargar, central, PAQUETES, _consultar: consultar };

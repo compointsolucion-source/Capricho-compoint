@@ -1,0 +1,120 @@
+# Compila "Compoint Check Terminal" (programa de Windows .exe y app de Android .apk) en los
+# servidores de GitHub y los publica en "Releases". El sistema y compoint.com.mx descargan siempre
+# la última versión desde:
+#   https://github.com/<repo>/releases/latest/download/CompointCheck-Terminal.exe
+#   https://github.com/<repo>/releases/latest/download/CompointCheck-Terminal.apk
+# Se ejecuta solo cuando cambia algo en terminal/, o a mano desde la pestaña "Actions".
+name: Terminal (Windows y Android)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terminal/**'
+      - '.github/workflows/terminal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: terminal
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terminal/android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Preparar el proyecto
+        run: |
+          rm -rf www && cp -r ../www www
+          cp -r ../../app-android/assets assets
+          cp ../../app-android/capricho.keystore ../../app-android/firmar.gradle .
+          npm install --no-audit --no-fund
+          npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#0a0c0a' --splashBackgroundColor '#ffffff' --splashBackgroundColorDark '#0a0c0a'
+
+      - name: Modo kiosco, cámara y versión
+        run: |
+          D=android/app/src/main/java/mx/com/compoint/check/terminal
+          cp native/MainActivity.java native/KioscoPlugin.java $D/
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' $MANIFEST
+          grep -n "CAMERA" $MANIFEST
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          echo "apply from: '../../firmar.gradle'" >> android/app/build.gradle
+          npx cap sync android
+
+      - name: Compilar APK firmada
+        working-directory: terminal/android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../CompointCheck-Terminal.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: terminal/android/CompointCheck-Terminal.apk
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: terminal/windows
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compilar instalador .exe
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          rm -rf www && cp -r ../www www
+          npm install --no-audit --no-fund
+          npm version 1.0.${{ github.run_number }} --no-git-tag-version
+          npm run dist
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: terminal/windows/dist/CompointCheck-Terminal.exe
+
+  publicar:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: salida
+          merge-multiple: true
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la salida
+          gh release create "terminal-v1.0.${{ github.run_number }}" salida/CompointCheck-Terminal.exe salida/CompointCheck-Terminal.apk \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" --latest \
+            --title "Compoint Check Terminal 1.0.${{ github.run_number }}" \
+            --notes "Programa de Windows (.exe) y app de Android (.apk) para las terminales de Compoint Check: Pantalla QR y Tableta checador. Se conectan con el código de 6 números de Terminales."
