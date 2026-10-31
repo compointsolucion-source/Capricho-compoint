@@ -100,6 +100,7 @@
       <div class="panel">
         <div class="panel-head"><h2>Correo del sistema</h2></div>
         <p style="font-size:12px;color:var(--muted);margin:14px 20px 0;">Desde esta cuenta salen las alertas, el aviso de corte cerrado y los enlaces de <b>"¿Olvidaste tu contraseña?"</b> y <b>"¿Olvidaste tu PIN?"</b>.</p>
+        <div id="smtpCompoint" style="display:none;margin:12px 20px 0;padding:10px 12px;border-radius:10px;background:var(--neon-bg);border:1px solid var(--line-bright);font-size:13px;"></div>
         <form id="formSmtp" class="panel-body">
           <div class="field"><label>Proveedor</label>
             <select name="proveedor" id="selProv"><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="otro">Otro (mi dominio)</option></select>
@@ -155,6 +156,11 @@ async function cargar() {
     const fs = document.getElementById('formSmtp').elements, s = conf.smtp;
     ['proveedor', 'host', 'puerto', 'usuario', 'correo_remitente', 'nombre_remitente'].forEach((k) => { fs[k].value = s[k] || ''; });
     document.getElementById('lblPassSmtp').textContent = s.tiene_contrasena ? '(ya guardada — déjala vacía para no cambiarla)' : '';
+    const ck = document.getElementById('smtpCompoint');
+    ck.style.display = conf.smtp_compoint ? '' : 'none';
+    ck.innerHTML = !conf.smtp_compoint ? '' : (s.tiene_contrasena && s.host && s.usuario
+      ? `Usas tu propio correo. Si lo borras, los correos saldrán del correo de Compoint (<b>${esc(conf.smtp_compoint)}</b>).`
+      : `✓ <b>Ya está listo:</b> los correos (recuperar contraseña o PIN, alertas) salen de <b>${esc(conf.smtp_compoint)}</b> con el nombre de tu negocio. No necesitas llenar nada. Si prefieres tu propio correo, llénalo abajo.`);
     document.getElementById('selEmpSup').innerHTML = '<option value="">— Selecciona —</option>' + conf.empleados.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
     usuarios = conf.usuarios;
     document.getElementById('usuarios').innerHTML = `<table class="checadas"><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>

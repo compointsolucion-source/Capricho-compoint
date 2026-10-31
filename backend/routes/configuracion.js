@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { verificarToken, requiereAdmin } = require('../middleware/auth');
-const { enviarCorreo } = require('../utils/correo');
+const { enviarCorreo, smtpCompoint } = require('../utils/correo');
 const { auditarFin } = require('../utils/finanzas');
 
 const router = express.Router();
@@ -30,7 +30,8 @@ router.get('/', async (req, res, next) => {
       ),
       pool.query('SELECT id, nombre FROM empleados WHERE activo = TRUE ORDER BY nombre')
     ]);
-    res.json({ general: general.rows[0], smtp: smtp.rows[0], usuarios: usuarios.rows, empleados: empleados.rows, temas: TEMAS });
+    const ck = smtpCompoint();
+    res.json({ general: general.rows[0], smtp: smtp.rows[0], smtp_compoint: ck ? ck.correo_remitente : null, usuarios: usuarios.rows, empleados: empleados.rows, temas: TEMAS });
   } catch (e) { next(e); }
 });
 

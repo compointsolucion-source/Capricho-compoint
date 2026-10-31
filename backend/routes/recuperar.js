@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
-const { enviarCorreo } = require('../utils/correo');
+const { enviarCorreo, smtpCompoint } = require('../utils/correo');
 const { buscarEmpleadoPorPin } = require('../utils/pin');
 const { auditarFin } = require('../utils/finanzas');
 
@@ -40,7 +40,7 @@ function baseFrontend(req) {
 async function smtpListo() {
   const { rows } = await pool.query('SELECT host, usuario, contrasena FROM configuracion_smtp WHERE id = 1');
   const c = rows[0];
-  return !!(c && c.host && c.usuario && c.contrasena);
+  return !!(c && c.host && c.usuario && c.contrasena) || !!smtpCompoint();
 }
 
 function correoHtml({ empresa, nombre, enlace, que }) {

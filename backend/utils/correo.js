@@ -1,11 +1,21 @@
 const nodemailer = require('nodemailer');
 const pool = require('../db');
 
+// Correo de Compoint (contacto@compoint.com.mx): Compoint lo pone en el servidor de cada cliente
+// (variables SMTP_*), así la recuperación de contraseña funciona desde el primer día sin configurar nada.
+// Si el negocio llena su propio correo en Configuración, se usa el suyo.
+function smtpCompoint() {
+  const e = process.env;
+  if (!e.SMTP_HOST || !e.SMTP_USUARIO || !e.SMTP_CONTRASENA) return null;
+  return { host: e.SMTP_HOST, puerto: Number(e.SMTP_PUERTO) || 465, usuario: e.SMTP_USUARIO, contrasena: e.SMTP_CONTRASENA,
+    correo_remitente: e.SMTP_REMITENTE || e.SMTP_USUARIO, nombre_remitente: null, de_compoint: true };
+}
+
 async function obtenerConfigSmtp() {
   const { rows } = await pool.query('SELECT * FROM configuracion_smtp WHERE id = 1');
   const c = rows[0];
-  if (!c || !c.host || !c.usuario || !c.contrasena) return null;
-  return c;
+  if (c && c.host && c.usuario && c.contrasena) return c;
+  return smtpCompoint();
 }
 
 // Regresa true si se envió, o un texto con el error.
@@ -32,4 +42,4 @@ async function enviarCorreo(destinatario, asunto, cuerpoHtml) {
   }
 }
 
-module.exports = { enviarCorreo };
+module.exports = { enviarCorreo, smtpCompoint };
