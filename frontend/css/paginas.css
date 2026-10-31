@@ -233,3 +233,4 @@ tr.fila-retardo td:first-child { border-left:2px solid var(--amber); }
 .lic-aviso.ambar { background:var(--amber-bg); border:1px solid rgba(247,198,93,.5); color:var(--white); }
 .lic-aviso.rojo { background:var(--red-bg); border:1px solid rgba(247,106,106,.55); color:var(--white); }
 .lic-aviso .btn-mini { white-space:nowrap; }
+.lic-aviso .lic-pagar { background:#009ee3; border-color:#009ee3; color:#fff; text-decoration:none; font-weight:700; margin-left:auto; }

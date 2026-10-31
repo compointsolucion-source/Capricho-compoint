@@ -112,4 +112,12 @@ function central() {
   return { token: TOKEN, url: URL_LICENCIA.replace(/licencia\.php(\?.*)?$/, 'terminal.php') };
 }
 
-module.exports = { iniciar, estado, revisarAhora, cargar, central, PAQUETES, _consultar: consultar };
+// Link privado para pagar o renovar en línea (compoint.com.mx/check/pagar.php con Mercado Pago).
+// La clave es sha256("pagar|" + token): compoint.com.mx la calcula igual y no revela el token.
+function linkPago() {
+  if (!TOKEN) return null;
+  const k = crypto.createHash('sha256').update('pagar|' + TOKEN).digest('hex');
+  return URL_LICENCIA.replace(/licencia\.php(\?.*)?$/, 'pagar.php') + '?k=' + k;
+}
+
+module.exports = { iniciar, estado, revisarAhora, cargar, central, linkPago, PAQUETES, _consultar: consultar };

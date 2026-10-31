@@ -200,13 +200,15 @@ function pintarAvisoLicencia(l) {
   document.querySelectorAll('.lic-aviso').forEach((x) => x.remove());
   if (!l || !l.control || (!l.bloqueado && !l.aviso)) return;
   const fecha = l.vence ? l.vence.split('-').reverse().join('/') : '';
+  const pagar = l.pagar_url && /^https:\/\//.test(l.pagar_url)
+    ? `<a class="btn-mini lic-pagar" href="${esc(l.pagar_url)}" target="_blank" rel="noopener">💳 Pagar en línea</a>` : '';
   const d = document.createElement('div');
   d.className = 'lic-aviso ' + (l.bloqueado ? 'rojo' : 'ambar');
   d.innerHTML = l.bloqueado
     ? `<div><b>${l.motivo === 'suspendida' ? '⛔ Tu sistema Compoint Check está suspendido.' : `⛔ Tu suscripción de Compoint Check venció el ${fecha}.`}</b>
-        Está en <b>solo consulta</b>: puedes ver tu información, pero no checar ni capturar. Para renovar: ${esc(l.contacto || 'Compoint')}.</div>
-       <button type="button" class="btn-mini">Ya pagué, revisar</button>`
-    : `<div>⏳ Tu suscripción de Compoint Check${l.paquete_nombre ? ` (<b>${esc(l.paquete_nombre)}</b>)` : ''} vence ${l.dias === 0 ? '<b>hoy</b>' : l.dias === 1 ? '<b>mañana</b>' : `en <b>${l.dias} días</b>`} (${fecha}). Para renovar: ${esc(l.contacto || 'Compoint')}.</div>`;
+        Está en <b>solo consulta</b>: puedes ver tu información, pero no checar ni capturar. ${pagar ? 'Para renovar, pulsa <b>«Pagar en línea»</b> o escribe a' : 'Para renovar:'} ${esc(l.contacto || 'Compoint')}.</div>
+       ${pagar}<button type="button" class="btn-mini">Ya pagué, revisar</button>`
+    : `<div>⏳ Tu suscripción de Compoint Check${l.paquete_nombre ? ` (<b>${esc(l.paquete_nombre)}</b>)` : ''} vence ${l.dias === 0 ? '<b>hoy</b>' : l.dias === 1 ? '<b>mañana</b>' : `en <b>${l.dias} días</b>`} (${fecha}). ${pagar ? 'Puedes renovarlo ya, sin perder días.' : `Para renovar: ${esc(l.contacto || 'Compoint')}.`}</div>${pagar}`;
   const b = d.querySelector('button');
   if (b) b.onclick = async () => {
     b.disabled = true; b.textContent = 'Revisando...';

@@ -1,5 +1,5 @@
 const express = require('express');
-const { estado, revisarAhora } = require('../utils/licencia');
+const { estado, revisarAhora, linkPago } = require('../utils/licencia');
 
 // Estado de la suscripción para las pantallas (aviso 7 días antes, "solo consulta", módulos).
 // No trae nada secreto: solo lo que el negocio debe ver.
@@ -10,7 +10,8 @@ router.get('/', (req, res) => {
   res.json({
     control: e.control, bloqueado: e.bloqueado, motivo: e.motivo || null, aviso: e.aviso,
     dias: e.dias ?? null, vence: e.vence || null, paquete: e.paquete || null, paquete_nombre: e.paquete_nombre || null,
-    modulos: e.modulos, max_empleados: e.max_empleados ?? null, max_terminales: e.max_terminales ?? null, contacto: e.contacto || null
+    modulos: e.modulos, max_empleados: e.max_empleados ?? null, max_terminales: e.max_terminales ?? null, contacto: e.contacto || null,
+    pagar_url: e.control ? linkPago() : null
   });
 });
 
