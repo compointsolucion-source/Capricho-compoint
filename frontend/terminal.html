@@ -137,6 +137,18 @@
   </div>
 </div>
 
+<!-- Primera vez: aviso de privacidad y permiso para la foto (ley de datos personales) -->
+<div class="t-modal" id="mPermiso">
+  <div class="t-card" style="max-width:560px;">
+    <h1 id="pTitulo" style="font-size:24px;">Tu foto al checar</h1>
+    <p id="pNombre" style="font-weight:700;margin-bottom:6px;"></p>
+    <div id="pTexto" style="text-align:left;font-size:15px;line-height:1.5;max-height:46vh;overflow:auto;"></div>
+    <button type="button" class="t-btn" id="bPermSi">Acepto que se tome mi foto</button>
+    <button type="button" class="t-btn sec" id="bPermNo">No acepto: checar solo con mi PIN</button>
+    <div class="t-error" id="ePerm"></div>
+  </div>
+</div>
+
 <script>window.CC_TOKEN_KEY = 'cc_terminal';</script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
@@ -322,7 +334,13 @@ function foto() {
 async function checar() {
   ocupado = true; $('estadoChec').textContent = 'Registrando...';
   try {
-    const r = await api('/terminales/checar', { method: 'POST', body: { pin, foto: foto() }, sinRedirigir: true });
+    let r = await api('/terminales/checar', { method: 'POST', body: { pin, foto: foto() }, sinRedirigir: true });
+    if (r && r.necesita_permiso) {
+      $('estadoChec').textContent = '';
+      const acepta = await pedirPermiso(r);
+      if (acepta === null) return;
+      r = await api('/terminales/checar', { method: 'POST', body: { pin, foto: acepta ? foto() : null }, sinRedirigir: true });
+    }
     $('estadoChec').textContent = '';
     await saludar({ nombre: r.empleado, tipo: r.tipo, hora: r.hora, foto_url: r.foto_url, puntualidad: r.puntualidad });
   } catch (e) {
@@ -330,6 +348,26 @@ async function checar() {
     if (/desconectad/i.test(e.message)) return location.reload();
     await saludar({ error: e.message });
   } finally { pin = ''; pintarPin(); ocupado = false; }
+}
+
+// La primera vez que checa: lee el aviso y elige con un toque. Devuelve true / false (o null si no se pudo guardar).
+function pedirPermiso(r) {
+  return new Promise((listo) => {
+    $('pTitulo').textContent = r.aviso.titulo;
+    $('pNombre').textContent = r.nombre;
+    $('pTexto').innerHTML = r.aviso.parrafos.map((t) => `<p>${esc(t)}</p>`).join('');
+    $('ePerm').textContent = '';
+    $('mPermiso').classList.add('ver');
+    const cerrar = setTimeout(() => { $('mPermiso').classList.remove('ver'); listo(null); }, 90000);
+    const elegir = async (acepta) => {
+      try {
+        await api('/terminales/permiso', { method: 'POST', body: { pin, acepta }, sinRedirigir: true });
+        clearTimeout(cerrar); $('mPermiso').classList.remove('ver'); listo(acepta);
+      } catch (e) { $('ePerm').textContent = e.message; }
+    };
+    $('bPermSi').onclick = () => elegir(true);
+    $('bPermNo').onclick = () => elegir(false);
+  });
 }
 
 // ---------- Saludo con sonido ----------

@@ -7,6 +7,7 @@ const { verificarToken, permitirTerminal } = require('../middleware/auth');
 const { buscarEmpleadoPorPin } = require('../utils/pin');
 const { registrarChecada } = require('../utils/registro');
 const { guardarDataUrl } = require('../utils/archivos');
+const { avisoCorto, guardarPermiso } = require('../utils/aviso');
 const { puntualidadAlChecar, evaluarEntrada, config, diaOperacion } = require('../utils/finanzas');
 const { sumarDias, aMinutos } = require('../utils/tiempo');
 
@@ -113,7 +114,24 @@ router.post('/pin', limitePin, async (req, res, next) => {
     const r = await identificar({ pin: String(pin), dispositivo, conf, ua: req.headers['user-agent'], registrar: true });
     if (r.error) return res.status(r.status).json({ ok: false, error: r.error, otro_celular: !!r.otro_celular });
     const sesion = jwt.sign({ tipo: 'qr_sesion', emp: r.emp.id, disp: r.disp ? r.disp.id : null }, process.env.JWT_SECRET, { expiresIn: '4m' });
-    res.json({ ok: true, nombre: r.emp.nombre, requiere_facial: conf.selfie, foto_url: r.emp.foto_url, sesion, celular_nuevo: !!r.nuevo });
+    // Fotos con permiso del empleado: la primera vez se le muestra el aviso; si no acepta, checa solo con PIN
+    const permiso = r.emp.consentimiento_fotos || null;
+    const aviso = conf.selfie && !permiso ? await avisoCorto() : null;
+    res.json({ ok: true, nombre: r.emp.nombre, requiere_facial: conf.selfie && permiso !== 'rechazo', permiso, aviso, foto_url: r.emp.foto_url, sesion, celular_nuevo: !!r.nuevo });
+  } catch (e) { next(e); }
+});
+
+// Celular: el empleado acepta o no el aviso de fotos (con la sesión que le dio su PIN)
+router.post('/permiso', limitePin, async (req, res, next) => {
+  try {
+    const { sesion, pin, acepta } = req.body;
+    let s = null;
+    try { s = jwt.verify(String(sesion || ''), process.env.JWT_SECRET); } catch (_) { s = null; }
+    if (!s || s.tipo !== 'qr_sesion') return res.status(410).json({ ok: false, expirado: true, error: 'El tiempo se terminó. Escanea otra vez el QR.' });
+    const emp = await buscarEmpleadoPorPin(String(pin || ''), null, s.emp);
+    if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
+    await guardarPermiso(emp.id, acepta === true, 'celular');
+    res.json({ ok: true, permiso: acepta === true ? 'acepto' : 'rechazo' });
   } catch (e) { next(e); }
 });
 
@@ -144,9 +162,12 @@ router.post('/checar', limitePin, async (req, res, next) => {
       emp = r.emp; dispId = r.disp ? r.disp.id : null;
     }
 
+    // Sin permiso del empleado no se guarda su foto (si dijo que no, checa solo con PIN)
+    const permiso = emp.consentimiento_fotos || null;
+    if (conf.selfie && !permiso) return res.status(428).json({ ok: false, necesita_permiso: true, aviso: await avisoCorto(), error: 'Primero lee el aviso de privacidad y elige si aceptas la foto.' });
     let fotoUrl = null;
-    const fotoValida = typeof foto === 'string' && /^data:image\/jpeg;base64,/.test(foto) && foto.length > 8000;
-    if (conf.selfie && !fotoValida) {
+    const fotoValida = permiso !== 'rechazo' && typeof foto === 'string' && /^data:image\/jpeg;base64,/.test(foto) && foto.length > 8000;
+    if (conf.selfie && permiso === 'acepto' && !fotoValida) {
       return res.status(400).json({ ok: false, error: 'Falta la foto de tu rostro. Vuelve a escanear el QR y permite la cámara.' });
     }
     if (fotoValida) { try { fotoUrl = await guardarDataUrl(foto, { maxMb: 2 }); } catch (e) { if (conf.selfie) throw e; } }

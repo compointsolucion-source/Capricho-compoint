@@ -4,6 +4,7 @@ const pool = require('../db');
 const { verificarToken, requiereAdmin } = require('../middleware/auth');
 const { guardarDataUrl } = require('../utils/archivos');
 const { buscarEmpleadoPorPin } = require('../utils/pin');
+const { VERSION } = require('../utils/aviso');
 const { auditarFin } = require('../utils/finanzas');
 const { estado: estadoLicencia } = require('../utils/licencia');
 
@@ -20,6 +21,7 @@ router.use(verificarToken);
 
 const COLUMNAS = `e.id, e.nombre, e.puesto, e.departamento, e.sucursal, e.foto_url, e.numero_empleado,
   e.huella_id, e.horario_id, e.jefe_directo_id, e.fecha_ingreso, e.activo, e.creado_en, e.sueldo_diario, e.permisos, e.correo,
+  e.consentimiento_fotos, e.consentimiento_en, e.consentimiento_medio,
   (e.pin_hash IS NOT NULL) AS tiene_pin,
   (e.foto_url IS NOT NULL AND e.descriptor_foto = e.foto_url AND e.descriptor_facial IS NULL) AS foto_sin_rostro,
   (SELECT json_build_object('id', d.id, 'descripcion', d.descripcion, 'creado_en', d.creado_en, 'ultimo_uso', d.ultimo_uso)
@@ -122,6 +124,16 @@ router.put('/:id', requiereAdmin, async (req, res, next) => {
     if (datos.pin) { valores.push(await bcrypt.hash(datos.pin, 10)); sets.push(`pin_hash=$${valores.length}`); }
     if (req.body.foto) { valores.push(await guardarDataUrl(req.body.foto)); sets.push(`foto_url=$${valores.length}`); }
     if (req.body.quitar_pin) sets.push('pin_hash=NULL');
+    // Permiso de fotos: «papel» (firmó en papel), «rechazo» (dijo que no) o «preguntar» (se le vuelve a preguntar al checar)
+    const pf = req.body.permiso_fotos;
+    if (pf === 'papel' || pf === 'rechazo') {
+      valores.push(pf === 'papel' ? 'acepto' : 'rechazo'); sets.push(`consentimiento_fotos=$${valores.length}`);
+      valores.push(VERSION); sets.push(`consentimiento_version=$${valores.length}`);
+      valores.push(pf === 'papel' ? 'papel' : 'encargado'); sets.push(`consentimiento_medio=$${valores.length}`);
+      sets.push('consentimiento_en=NOW()');
+    } else if (pf === 'preguntar') {
+      sets.push('consentimiento_fotos=NULL', 'consentimiento_en=NULL', 'consentimiento_version=NULL', 'consentimiento_medio=NULL');
+    }
     valores.push(id);
     await pool.query(`UPDATE empleados SET ${sets.join(', ')} WHERE id=$${valores.length}`, valores);
     if (req.body.foto) {

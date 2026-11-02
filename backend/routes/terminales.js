@@ -14,6 +14,7 @@ const { puntualidadAlChecar } = require('../utils/finanzas');
 // una tableta donde el personal checa con su PIN y una selfie (rol "checador"), o un equipo
 // que abre el panel normal (rol "admin"). Se conectan con un código de 6 números que da el
 // administrador: así nadie escribe direcciones ni deja la contraseña del administrador en el equipo.
+const { avisoCorto, guardarPermiso } = require('../utils/aviso');
 const router = express.Router();
 
 const ROLES = { qr: 'Pantalla QR', checador: 'Tableta checador', admin: 'Panel del administrador' };
@@ -118,9 +119,12 @@ router.post('/checar', limitePin, permitirTerminal(['checador']), async (req, re
     const emp = await buscarEmpleadoPorPin(pin);
     if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
     const conf = (await pool.query('SELECT requiere_facial FROM configuracion WHERE id = 1')).rows[0] || {};
+    // Sin permiso del empleado no se guarda su foto: la primera vez la tableta le muestra el aviso
+    const permiso = emp.consentimiento_fotos || null;
+    if (conf.requiere_facial && !permiso) return res.json({ ok: false, necesita_permiso: true, nombre: emp.nombre, aviso: await avisoCorto() });
     const foto = req.body.foto;
-    const fotoValida = typeof foto === 'string' && /^data:image\/jpeg;base64,/.test(foto) && foto.length > 8000;
-    if (conf.requiere_facial && !fotoValida) return res.status(400).json({ ok: false, error: 'No se pudo tomar tu foto. Mira a la cámara e intenta otra vez.' });
+    const fotoValida = permiso !== 'rechazo' && typeof foto === 'string' && /^data:image\/jpeg;base64,/.test(foto) && foto.length > 8000;
+    if (conf.requiere_facial && permiso === 'acepto' && !fotoValida) return res.status(400).json({ ok: false, error: 'No se pudo tomar tu foto. Mira a la cámara e intenta otra vez.' });
     let fotoUrl = null;
     if (fotoValida) { try { fotoUrl = await guardarDataUrl(foto, { maxMb: 2 }); } catch (e) { if (conf.requiere_facial) throw e; } }
     const r = await registrarChecada({
@@ -137,6 +141,17 @@ router.post('/checar', limitePin, permitirTerminal(['checador']), async (req, re
     if (e.status === 409) return res.status(409).json({ ok: false, error: e.message });
     next(e);
   }
+});
+
+// Tableta checador: el empleado acepta o no el aviso de fotos (escribe su PIN otra vez)
+router.post('/permiso', limitePin, permitirTerminal(['checador']), async (req, res, next) => {
+  try {
+    if (!req.terminal) return res.status(401).json({ ok: false, error: 'Este equipo no está conectado.' });
+    const emp = await buscarEmpleadoPorPin(String(req.body.pin || ''));
+    if (!emp) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
+    await guardarPermiso(emp.id, req.body.acepta === true, 'tableta');
+    res.json({ ok: true, permiso: req.body.acepta === true ? 'acepto' : 'rechazo' });
+  } catch (e) { next(e); }
 });
 
 // Saludo en pantalla: checadas nuevas desde la última que se mostró

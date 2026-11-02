@@ -37,6 +37,9 @@
           <div class="field"><label>Correo <span style="text-transform:none;letter-spacing:0;">(opcional, para recuperar su PIN)</span></label><input type="email" name="correo" placeholder="nombre@correo.com" autocomplete="off"></div>
           <div class="field"><label id="lblPin">PIN de 4 dígitos (para checar por QR)</label><input type="text" name="pin" maxlength="4" inputmode="numeric" pattern="\d{4}" placeholder="••••" autocomplete="off"></div>
           <div class="field"><label>ID de huella <span style="text-transform:none;letter-spacing:0;">(lo asigna el lector)</span></label><input type="text" name="huella_id" placeholder="Opcional"></div>
+          <div class="field full" id="campoPermiso"><label>Permiso para usar su foto <span style="text-transform:none;letter-spacing:0;">(lo pide la ley de datos personales)</span></label>
+            <div id="permisoActual" style="font-size:13px;margin:2px 0 8px;"></div>
+            <select name="permiso_fotos"><option value="">— Sin cambio —</option><option value="papel">Aceptó firmando en papel</option><option value="rechazo">No acepta (checa solo con PIN)</option><option value="preguntar">Volver a preguntarle al checar</option></select></div>
           <div class="field full"><label>Fotografía (con ella se comparan las selfies de cada checada: de frente, sin lentes oscuros ni gorra, con buena luz)</label><input type="file" id="foto" accept="image/jpeg,image/png,image/webp"></div>
         </div>
         <div class="checkbox-row"><input type="checkbox" name="activo" id="activo" checked><label for="activo">Empleado activo</label></div>
@@ -87,7 +90,7 @@ function pintar() {
   const lista = empleados.filter((e) => !q || [e.nombre, e.puesto, e.departamento, e.numero_empleado].join(' ').toLowerCase().includes(q));
   const t = document.getElementById('tabla');
   if (!empleados.length) { t.innerHTML = '<div class="empty-state">Aún no hay empleados registrados. Da de alta el primero con "+ Nuevo empleado".</div>'; return; }
-  t.innerHTML = `<table class="checadas"><thead><tr><th>Empleado</th><th>No.</th><th>Depto / Sucursal</th><th>Horario</th><th class="r">Sueldo/día</th><th>PIN</th><th>Celular</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+  t.innerHTML = `<table class="checadas"><thead><tr><th>Empleado</th><th>No.</th><th>Depto / Sucursal</th><th>Horario</th><th class="r">Sueldo/día</th><th>PIN</th><th>Permiso foto</th><th>Celular</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
     ${lista.map((e) => `<tr>
       <td>${e.foto_url ? `<img class="avatar-thumb" src="${esc(urlArchivo(e.foto_url))}" alt="">` : `<span class="avatar-placeholder">${esc(e.nombre.charAt(0).toUpperCase())}</span>`}${esc(e.nombre)}
         <span class="sub-celda">${esc(e.puesto || '—')}${!e.foto_url ? ' · <span style="color:var(--amber)" title="Sin foto, sus checadas quedarán por revisar">sin foto</span>' : e.foto_sin_rostro ? ' · <span style="color:var(--amber)" title="La foto no muestra bien el rostro: sube otra de frente y con buena luz">foto no sirve</span>' : ''}</span></td>
@@ -96,6 +99,7 @@ function pintar() {
       <td>${esc(e.horario_nombre || '—')}</td>
       <td class="hora" style="text-align:right;">${Number(e.sueldo_diario) ? '$' + Number(e.sueldo_diario).toLocaleString('es-MX') : '<span style="color:var(--amber)">—</span>'}</td>
       <td>${e.tiene_pin ? '<span class="badge badge-entrada">Configurado</span>' : '<span class="badge badge-salida">Sin PIN</span>'}</td>
+      <td style="font-size:12px;white-space:nowrap;">${textoPermiso(e)}</td>
       <td style="font-size:12px;white-space:nowrap;">${e.celular ? `<span title="${esc(e.celular.descripcion || '')} · registrado el ${fechaCorta(String(e.celular.creado_en).slice(0, 10))}">📱 Registrado</span><br>
         <button class="accion-link" style="padding-left:0;" onclick="liberarCelular(${e.id})">Liberar</button>` : '<span style="color:var(--muted)">Al checar</span>'}</td>
       <td>${e.activo ? '<span class="estado-pill estado-activo">Activo</span>' : '<span class="estado-pill estado-inactivo">Inactivo</span>'}</td>
@@ -103,6 +107,13 @@ function pintar() {
         <button class="accion-link" onclick="alternar(${e.id}, ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button>
         <button class="accion-link rojo" onclick="eliminar(${e.id})">Eliminar</button></td>
     </tr>`).join('')}</tbody></table>`;
+}
+
+// Permiso del empleado para su foto (lo da con su PIN la primera vez que checa)
+function textoPermiso(e) {
+  if (e.consentimiento_fotos === 'acepto') return `<span style="color:var(--neon)" title="${esc(e.consentimiento_medio === 'papel' ? 'Firmó en papel' : 'Aceptó con su PIN')} el ${fechaCorta(String(e.consentimiento_en).slice(0, 10))}">✓ Aceptó</span>`;
+  if (e.consentimiento_fotos === 'rechazo') return '<span style="color:var(--amber)" title="Checa solo con su PIN, sin foto">Sin foto</span>';
+  return '<span style="color:var(--muted)">Al checar</span>';
 }
 
 function abrirForm(emp) {
@@ -117,7 +128,10 @@ function abrirForm(emp) {
     form.elements.sueldo_diario.value = Number(emp.sueldo_diario) || '';
     form.elements.horario_id.value = emp.horario_id || '';
     form.elements.activo.checked = emp.activo;
+    document.getElementById('permisoActual').innerHTML = 'Ahora: ' + textoPermiso(emp);
+    document.getElementById('campoPermiso').style.display = '';
   } else {
+    document.getElementById('campoPermiso').style.display = 'none';
     form.elements.activo.checked = true;
   }
   panel.classList.remove('paso-oculto');
@@ -172,7 +186,8 @@ form.addEventListener('submit', async (ev) => {
       nombre: f.nombre.value, puesto: f.puesto.value, departamento: f.departamento.value, sucursal: f.sucursal.value,
       numero_empleado: f.numero_empleado.value, correo: f.correo.value.trim(), horario_id: f.horario_id.value || null, fecha_ingreso: f.fecha_ingreso.value || null,
       pin: f.pin.value.trim(), huella_id: f.huella_id.value, activo: f.activo.checked, sueldo_diario: f.sueldo_diario.value,
-      foto: await leerArchivo(document.getElementById('foto'))
+      foto: await leerArchivo(document.getElementById('foto')),
+      permiso_fotos: f.permiso_fotos.value || undefined
     };
     if (editandoId) await api(`/empleados/${editandoId}`, { method: 'PUT', body });
     else await api('/empleados', { method: 'POST', body });

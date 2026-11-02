@@ -25,6 +25,9 @@
   .btn-foto { margin-top: 4px; }
   .camara-box.flash::after { content:''; position:absolute; inset:0; background:#fff; animation: flash .35s ease-out forwards; }
   @keyframes flash { from { opacity:.9; } to { opacity:0; } }
+  .aviso-box { text-align:left; background: var(--bg-panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; font-size: 13px; line-height: 1.5; color: #d6ddd7; max-height: 42vh; overflow:auto; margin: 10px 0 14px; }
+  .aviso-box p { margin: 0 0 8px; }
+  .btn-sec { display:block; width:100%; margin-top:10px; padding:12px; border-radius:10px; background:transparent; border:1.5px solid var(--line); color: var(--white); font-weight:600; font-size:14px; cursor:pointer; font-family: var(--font-body); }
   .res-tarde { background: var(--amber-bg); border: 1px solid rgba(247,198,93,.4); color: var(--amber); border-radius: 12px; padding: 12px; text-align:center; font-size: 13.5px; margin-top: 12px; }
 </style>
 <title>Registrar checada — Compoint Check</title>
@@ -48,6 +51,15 @@
       <input type="tel" inputmode="numeric" maxlength="4" pattern="[0-9]*" class="pin-input" id="pin" placeholder="••••" autocomplete="off">
       <button type="button" class="btn-primary" id="btnValidarPin">Continuar</button>
       <div id="resultadoPin" style="margin-top:18px;"></div>
+    </div>
+
+    <div id="pasoPermiso" class="paso-oculto">
+      <h2 id="permisoTitulo">Tu foto al checar</h2>
+      <p class="sub" id="permisoNombre"></p>
+      <div class="aviso-box" id="permisoTexto"></div>
+      <button type="button" class="btn-primary" id="btnAcepto">Acepto que se tome mi foto</button>
+      <button type="button" class="btn-sec" id="btnNoAcepto">No acepto: checar solo con mi PIN</button>
+      <p class="sub" style="margin-top:12px;font-size:12px;"><a href="aviso-empleados.html" target="_blank" style="color:var(--neon)">Leer el aviso de privacidad completo</a></p>
     </div>
 
     <div id="pasoFacial" class="paso-oculto">
@@ -98,7 +110,7 @@ function botonesReintento() {
 document.querySelectorAll('.acciones-reintento').forEach((d) => { d.innerHTML = botonesReintento(); });
 
 function mostrar(id) {
-  ['pasoCargando', 'pasoExpirado', 'pasoPin', 'pasoFacial', 'pasoResultado'].forEach((p) =>
+  ['pasoCargando', 'pasoExpirado', 'pasoPin', 'pasoPermiso', 'pasoFacial', 'pasoResultado'].forEach((p) =>
     document.getElementById(p).classList.toggle('paso-oculto', p !== id));
 }
 
@@ -167,6 +179,7 @@ btn.addEventListener('click', async () => {
     }
     empleadoActual = data;
     sesion = data.sesion || null;
+    if (data.aviso) return pedirPermiso(data);
     if (data.requiere_facial) {
       mostrar('pasoFacial');
       document.getElementById('nombreEmpleado').textContent = data.nombre;
@@ -179,6 +192,26 @@ btn.addEventListener('click', async () => {
     btn.disabled = false; btn.textContent = 'Continuar';
   }
 });
+
+// Primera vez: el empleado lee el aviso de privacidad y elige si acepta la foto (ley de datos personales)
+function pedirPermiso(data) {
+  mostrar('pasoPermiso');
+  document.getElementById('permisoTitulo').textContent = data.aviso.titulo;
+  document.getElementById('permisoNombre').textContent = data.nombre;
+  document.getElementById('permisoTexto').innerHTML = data.aviso.parrafos.map((p) => `<p>${esc(p)}</p>`).join('');
+  const si = document.getElementById('btnAcepto'), no = document.getElementById('btnNoAcepto');
+  const elegir = async (acepta) => {
+    si.disabled = no.disabled = true;
+    try {
+      const r = await post('/qr/permiso', { sesion, pin: pinInput.value, acepta });
+      if (!r.ok) return mostrarResultadoFinal(r);
+      if (acepta) { mostrar('pasoFacial'); document.getElementById('nombreEmpleado').textContent = data.nombre; tomarSelfie(); }
+      else registrarChecada(null);
+    } catch (_) { mostrarResultadoFinal({ ok: false, error: 'Error de conexión. Intenta de nuevo.' }); }
+  };
+  si.onclick = () => elegir(true);
+  no.onclick = () => elegir(false);
+}
 
 async function registrarChecada(foto) {
   if (enviando) return;

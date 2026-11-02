@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginas.css">
+<title>Aviso de privacidad para empleados — Compoint Check</title>
+<style>
+  body { background: var(--bg); }
+  .aviso-doc { max-width: 760px; margin: 0 auto; padding: 28px 20px 48px; color: var(--white); line-height: 1.6; font-size: 14.5px; }
+  .aviso-doc h1 { font-size: 24px; margin: 0 0 4px; }
+  .aviso-doc h2 { font-size: 16px; margin: 22px 0 6px; color: var(--neon); }
+  .aviso-doc p, .aviso-doc li { color: #d6ddd7; }
+  .aviso-doc ul { padding-left: 20px; margin: 6px 0; }
+  .aviso-doc .ver { color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main class="aviso-doc">
+  <h1>Aviso de privacidad para empleados</h1>
+  <div class="ver" id="ver">Cargando…</div>
+
+  <h2>1. Quién es responsable de tus datos</h2>
+  <p><b id="empresa">Tu centro de trabajo</b><span id="dom"></span> es responsable de tus datos personales, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares. El sistema Compoint Check (de Compoint, Punto de Soluciones) solo los guarda y procesa <b>por cuenta</b> de tu centro de trabajo, como encargado.</p>
+
+  <h2>2. Qué datos usamos</h2>
+  <ul>
+    <li>Nombre, número de empleado, puesto, área, horario, correo y fecha de ingreso.</li>
+    <li>Tu PIN (guardado cifrado) y el celular con el que checas (un identificador, no tus fotos ni tus contactos).</li>
+    <li>La fecha y hora de tus entradas y salidas, y en qué terminal checaste.</li>
+    <li>Sueldo, bonos, descuentos y pagos de nómina, si tu centro de trabajo usa la nómina.</li>
+    <li><b>Datos sensibles:</b> la foto de tu expediente y la foto de tu rostro (selfie) al checar, y en su caso tu huella digital. Solo con tu permiso.</li>
+  </ul>
+
+  <h2>3. Para qué los usamos</h2>
+  <ul>
+    <li>Registrar tu jornada de trabajo (entradas y salidas), como pide la Ley Federal del Trabajo.</li>
+    <li>Calcular retardos, faltas, horas extra, bonos y tu pago.</li>
+    <li>Comparar tu selfie con la foto de tu expediente para evitar que alguien cheque por ti (solo si diste tu permiso).</li>
+    <li>Mostrarte tu información en tu portal.</li>
+  </ul>
+  <p>No usamos tus datos para publicidad, no los vendemos y no los compartimos, salvo cuando una autoridad los pida conforme a la ley (por ejemplo, la autoridad laboral o el IMSS).</p>
+
+  <h2>4. Tu permiso para usar tu rostro y tu huella</h2>
+  <p>La primera vez que checas te mostramos un aviso corto y tú eliges, con tu PIN, si aceptas que se tome tu foto. <b>Si no aceptas, checas solo con tu PIN</b> y no pierdes ningún derecho. Puedes cambiar tu decisión cuando quieras, pidiéndolo a tu encargado.</p>
+
+  <h2>5. Dónde se guardan y cuánto tiempo</h2>
+  <p>En los servidores de Compoint Check (Contabo, en Estados Unidos) con conexión segura, PIN cifrado y respaldo diario (Cloudflare, en Norteamérica). Se guardan mientras trabajes ahí y después el tiempo que la ley obliga a tu centro de trabajo a conservar los registros de asistencia y nómina.</p>
+
+  <h2>6. Tus derechos (ARCO)</h2>
+  <p>Puedes pedir <b>ver</b> tus datos, <b>corregirlos</b>, que se <b>borren</b> cuando ya no sean necesarios, u <b>oponerte</b> a algún uso, y retirar tu permiso de la foto. Pídelo por escrito a tu centro de trabajo; tiene 20 días para contestarte. Si no te atienden, puedes acudir a la Secretaría Anticorrupción y Buen Gobierno.</p>
+
+  <h2>7. Cambios a este aviso</h2>
+  <p>Si cambia, lo publicaremos en esta misma página y, si cambia el uso de tu foto, te volveremos a pedir tu permiso al checar.</p>
+</main>
+<script src="js/config.js"></script>
+<script>
+fetch(API_URL + '/configuracion/aviso-empleados').then((r) => r.json()).then((d) => {
+  document.getElementById('empresa').textContent = d.empresa || 'Tu centro de trabajo';
+  if (d.domicilio) document.getElementById('dom').textContent = ', con domicilio en ' + d.domicilio + ',';
+  document.getElementById('ver').textContent = 'Versión ' + d.version;
+}).catch(() => { document.getElementById('ver').textContent = ''; });
+</script>
+</body>
+</html>
