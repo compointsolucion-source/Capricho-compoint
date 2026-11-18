@@ -31,11 +31,24 @@ const RESPUESTA = {
   empleado: 'Si el número de empleado tiene un correo registrado, te enviamos un enlace para crear un PIN nuevo. Revisa tu bandeja y la carpeta de spam. El enlace vence en 30 minutos.'
 };
 
+// Dirección del sistema para el enlace del correo. NUNCA se toma de Origin/Referer: esos los
+// escribe quien manda la petición y un tramposo podría poner su página falsa en el enlace.
+//  1) FRONTEND_URL si está puesta.
+//  2) Si este mismo servidor entrega las pantallas (sistemas en el servidor de Compoint), su propia
+//     dirección: el Host lo decide el servidor que enruta (solo llegan aquí las peticiones a este dominio).
 function baseFrontend(req) {
   if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/$/, '');
-  const o = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : '');
-  return o.replace(/\/$/, '');
+  if (process.env.FRONTEND_DIR) {
+    const host = String(req.headers.host || '').toLowerCase();
+    if (/^[a-z0-9.-]+(:\d{1,5})?$/.test(host)) {
+      const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host);
+      return `${local ? req.protocol : 'https'}://${host}`;
+    }
+  }
+  return '';
 }
+
+const escaparHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function smtpListo() {
   const { rows } = await pool.query('SELECT host, usuario, contrasena FROM configuracion_smtp WHERE id = 1');
@@ -44,6 +57,7 @@ async function smtpListo() {
 }
 
 function correoHtml({ empresa, nombre, enlace, que }) {
+  empresa = escaparHtml(empresa); nombre = escaparHtml(nombre); enlace = escaparHtml(enlace);
   return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e3e8e5;border-radius:12px;overflow:hidden">
     <div style="background:#0a0c0a;color:#5df76a;padding:18px 22px;font-weight:700;font-size:16px">${empresa} · Compoint Check</div>
     <div style="padding:22px;color:#16201a;font-size:14px;line-height:1.55">
@@ -71,6 +85,11 @@ router.post('/solicitar', limiteSolicitar, async (req, res, next) => {
       : (await pool.query('SELECT id, nombre, correo FROM empleados WHERE activo AND numero_empleado = $1 LIMIT 1', [dato])).rows[0];
     if (cuenta && cuenta.correo && correoValido(cuenta.correo)) {
       const base = baseFrontend(req);
+      if (!base) {
+        // Misma respuesta de siempre (no revela si la cuenta existe); el aviso queda en el registro del servidor
+        console.error('[recuperar] falta la variable FRONTEND_URL (la dirección de las pantallas): no se puede armar el enlace.');
+        return res.json({ ok: true, mensaje: RESPUESTA[tipo] });
+      }
       const token = crypto.randomBytes(32).toString('hex');
       await pool.query('UPDATE recuperaciones SET usado_en = NOW() WHERE tipo = $1 AND cuenta_id = $2 AND usado_en IS NULL', [tipo, cuenta.id]);
       await pool.query(
