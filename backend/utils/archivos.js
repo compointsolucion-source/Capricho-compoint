@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const pool = require('../db');
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];
@@ -25,4 +26,20 @@ function errorUsuario(mensaje) {
   return e;
 }
 
-module.exports = { guardarDataUrl, errorUsuario, TIPOS_IMAGEN, TIPOS_JUSTIFICANTE };
+// Llave para VER fotos y justificantes. Cambia cada día y solo la recibe quien tiene sesión
+// (panel o terminal), en la cabecera X-Llave-Archivos. Las imágenes la llevan como ?k=...
+// Así una foto no se abre aunque alguien consiga su dirección, salvo con una llave del día.
+function llaveArchivos(diasAtras = 0) {
+  const dia = new Date(Date.now() - diasAtras * 86400000).toISOString().slice(0, 10);
+  return crypto.createHmac('sha256', String(process.env.JWT_SECRET || '')).update('archivos|' + dia).digest('hex').slice(0, 32);
+}
+function llaveArchivosValida(k) {
+  k = String(k || '');
+  if (!/^[a-f0-9]{32}$/.test(k)) return false;
+  return [0, 1].some((i) => crypto.timingSafeEqual(Buffer.from(k), Buffer.from(llaveArchivos(i))));
+}
+function darLlaveArchivos(res) {
+  try { res.set('X-Llave-Archivos', llaveArchivos()); } catch (_) { /* respuesta ya enviada */ }
+}
+
+module.exports = { guardarDataUrl, errorUsuario, TIPOS_IMAGEN, TIPOS_JUSTIFICANTE, llaveArchivos, llaveArchivosValida, darLlaveArchivos };

@@ -6,15 +6,23 @@ const pool = require('../db');
 // Al arrancar, aplica los archivos de sql/ en orden. Todos están escritos
 // para poder correrse varias veces sin dañar nada (IF NOT EXISTS / ON CONFLICT),
 // así una instalación nueva para otro cliente solo necesita su DATABASE_URL.
+// Con candado: si arrancan dos copias del sistema al mismo tiempo (al actualizar), una espera a la otra.
 async function migrar() {
   const carpeta = path.join(__dirname, '..', 'sql');
   const archivos = fs.readdirSync(carpeta).filter((f) => f.endsWith('.sql')).sort();
-  for (const archivo of archivos) {
-    const sql = fs.readFileSync(path.join(carpeta, archivo), 'utf8');
-    await pool.query(sql);
-    console.log(`[migrar] ${archivo} OK`);
+  const c = await pool.connect();
+  try {
+    await c.query('SELECT pg_advisory_lock(7351000)');
+    for (const archivo of archivos) {
+      const sql = fs.readFileSync(path.join(carpeta, archivo), 'utf8');
+      await c.query(sql);
+      console.log(`[migrar] ${archivo} OK`);
+    }
+    await usuarioInicial();
+  } finally {
+    await c.query('SELECT pg_advisory_unlock(7351000)').catch(() => {});
+    c.release();
   }
-  await usuarioInicial();
 }
 
 // Usuario dueño inicial, solo si todavía no hay ningún usuario.

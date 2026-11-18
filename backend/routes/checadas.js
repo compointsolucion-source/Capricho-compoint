@@ -32,7 +32,8 @@ function validar(b) {
 }
 
 router.post('/', async (req, res, next) => {
-  const cliente = await pool.connect();
+  let cliente;
+  try { cliente = await pool.connect(); } catch (e) { return next(e); }
   try {
     const error = validar(req.body) || (!req.body.empleado_id ? 'Selecciona un empleado.' : null);
     if (error) return res.status(400).json({ error });
@@ -49,7 +50,8 @@ router.post('/', async (req, res, next) => {
 });
 
 router.put('/:id', async (req, res, next) => {
-  const cliente = await pool.connect();
+  let cliente;
+  try { cliente = await pool.connect(); } catch (e) { return next(e); }
   try {
     const error = validar(req.body);
     if (error) return res.status(400).json({ error });
@@ -67,7 +69,8 @@ router.put('/:id', async (req, res, next) => {
 });
 
 router.delete('/:id', async (req, res, next) => {
-  const cliente = await pool.connect();
+  let cliente;
+  try { cliente = await pool.connect(); } catch (e) { return next(e); }
   try {
     await cliente.query('BEGIN');
     const orig = (await cliente.query('DELETE FROM checadas WHERE id = $1 RETURNING *', [req.params.id])).rows[0];

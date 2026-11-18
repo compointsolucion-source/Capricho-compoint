@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../db');
+const { darLlaveArchivos } = require('../utils/archivos');
 
 function leerToken(req) {
   const header = req.headers['authorization'] || '';
@@ -15,6 +16,7 @@ function verificarToken(req, res, next) {
   jwt.verify(token, process.env.JWT_SECRET, (err, datos) => {
     if (err || datos.tipo !== 'admin') return res.status(401).json({ error: 'Tu sesión expiró, vuelve a entrar' });
     req.usuario = datos;
+    darLlaveArchivos(res);
     next();
   });
 }
@@ -54,6 +56,7 @@ function permitirTerminal(roles = ['qr', 'checador']) {
       if (!roles.includes(t.rol)) return res.status(403).json({ error: 'Esta terminal no tiene permiso para esto.' });
       req.terminal = t;
       req.usuario = { tipo: 'terminal', rol: 'terminal', id: null, nombre: `Terminal ${t.nombre}` };
+      darLlaveArchivos(res);
       next();
     } catch (e) { next(e); }
   };

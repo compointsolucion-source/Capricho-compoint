@@ -1,18 +1,34 @@
 const express = require('express');
 const pool = require('../db');
-const { verificarToken, requiereAdmin } = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const { verificarToken, requiereAdmin, terminalDeToken } = require('../middleware/auth');
+const { llaveArchivosValida } = require('../utils/archivos');
 const { ahora } = require('../utils/tiempo');
 
 const router = express.Router();
 
-// Archivos (fotos y justificantes). El id es un UUID imposible de adivinar,
-// así la foto de referencia se puede leer desde el celular al checar.
+// Archivos (fotos, selfies y justificantes): datos sensibles. Solo se abren con la llave del día
+// (?k=..., la reciben el panel y las terminales con sesión) o con una sesión válida.
+// El logo del negocio sí es público (sale en las pantallas antes de entrar).
+async function puedeVerArchivo(req, id) {
+  if (llaveArchivosValida(req.query.k)) return true;
+  const auth = String(req.headers.authorization || '');
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (token.startsWith('T.')) { if (await terminalDeToken(token)) return true; }
+  else if (token) { try { if (jwt.verify(token, process.env.JWT_SECRET).tipo === 'admin') return true; } catch (_) { /* no vale */ } }
+  const logo = (await pool.query('SELECT logo_url FROM configuracion WHERE id = 1')).rows[0]?.logo_url || '';
+  return logo.toLowerCase().endsWith('/' + id.toLowerCase());
+}
+
 router.get('/archivos/:id', async (req, res, next) => {
   try {
-    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).end();
-    const { rows } = await pool.query('SELECT tipo_mime, datos FROM archivos WHERE id = $1', [req.params.id]);
+    const id = req.params.id;
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).end();
+    if (!(await puedeVerArchivo(req, id))) return res.status(401).json({ error: 'Inicia sesión para ver este archivo.' });
+    const { rows } = await pool.query('SELECT tipo_mime, datos FROM archivos WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).end();
     res.set('Content-Type', rows[0].tipo_mime);
+    res.set('X-Content-Type-Options', 'nosniff');
     res.set('Cache-Control', 'private, max-age=86400');
     res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     res.send(rows[0].datos);
@@ -91,7 +107,8 @@ router.post('/reinicio', async (req, res, next) => {
   if (String(req.body.frase || '').trim().toUpperCase() !== FRASES[nivel]) {
     return res.status(400).json({ error: 'La frase de confirmación no coincide. No se hizo ningún cambio.' });
   }
-  const c = await pool.connect();
+  let c;
+  try { c = await pool.connect(); } catch (e) { return next(e); }
   try {
     await c.query('BEGIN');
     let mensaje = '';

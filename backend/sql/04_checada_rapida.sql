@@ -36,5 +36,12 @@ CREATE TABLE IF NOT EXISTS dispositivos (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dispositivo_activo_empleado ON dispositivos (empleado_id) WHERE activo;
 
 -- Auditoría: también registra cuando el admin confirma una checada "por revisar"
-ALTER TABLE auditoria_checadas DROP CONSTRAINT IF EXISTS auditoria_checadas_accion_check;
-ALTER TABLE auditoria_checadas ADD CONSTRAINT auditoria_checadas_accion_check CHECK (accion IN ('creada','editada','eliminada','aprobada'));
+-- (solo se cambia si hace falta: así no se bloquea la tabla en cada arranque)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'auditoria_checadas_accion_check'
+                 AND pg_get_constraintdef(oid) LIKE '%aprobada%') THEN
+    ALTER TABLE auditoria_checadas DROP CONSTRAINT IF EXISTS auditoria_checadas_accion_check;
+    ALTER TABLE auditoria_checadas ADD CONSTRAINT auditoria_checadas_accion_check CHECK (accion IN ('creada','editada','eliminada','aprobada'));
+  END IF;
+END $$;

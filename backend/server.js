@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const { migrar } = require('./utils/migrar');
 const licencia = require('./utils/licencia');
+const limpieza = require('./utils/limpieza');
 const { verificarLicencia } = require('./middleware/licencia');
 
 if (!process.env.JWT_SECRET) {
@@ -13,7 +14,7 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(cors());
+app.use(cors({ exposedHeaders: ['X-Llave-Archivos'] }));
 app.use(express.json({ limit: '12mb' }));
 
 app.use((req, res, next) => {
@@ -80,9 +81,32 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Error interno del servidor. Intenta de nuevo.' });
 });
 
+// Un error que nadie atrapó (por ejemplo, la base tardó en contestar) se anota y el sistema SIGUE prendido.
+process.on('unhandledRejection', (e) => console.error('[error sin atrapar]', e && e.message ? e.message : e));
+
+// Al arrancar: prepara la base (reintenta si todavía no contesta). Si de plano no se puede,
+// el sistema no abre a medias: se detiene y el servidor lo vuelve a levantar solo.
 const PORT = process.env.PORT || 3000;
-migrar()
-  .catch((e) => console.error('[migrar] Error:', e.message))
-  .then(() => licencia.iniciar())
-  .catch((e) => console.error('[licencia] Error:', e.message))
-  .finally(() => app.listen(PORT, () => console.log(`Compoint Check escuchando en el puerto ${PORT}`)));
+async function arrancar() {
+  for (let intento = 1; ; intento++) {
+    try { await migrar(); break; } catch (e) {
+      console.error(`[migrar] Error (intento ${intento} de 5):`, e.message);
+      // Base que no contesta: se detiene y el servidor lo vuelve a levantar solo cuando ya conteste.
+      // Error en un cambio de la base: arranca igual (como antes) para no dejar al cliente sin servicio.
+      const sinConexion = /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|timeout|connect|terminat|57P0/i.test(`${e.code || ''} ${e.message || ''}`);
+      if (intento >= 5) {
+        if (sinConexion) {
+          console.error('[migrar] La base de datos no contesta. El sistema se detiene y se vuelve a levantar solo.');
+          process.exit(1);
+        }
+        console.error('[migrar] Un cambio de la base falló; el sistema arranca con lo que ya tenía. Avisa a Compoint.');
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 5000 * intento));
+    }
+  }
+  try { await licencia.iniciar(); } catch (e) { console.error('[licencia] Error:', e.message); }
+  app.listen(PORT, () => console.log(`Compoint Check escuchando en el puerto ${PORT}`));
+  limpieza.iniciar();   // selfies viejas y archivos sueltos, una vez al día
+}
+arrancar();

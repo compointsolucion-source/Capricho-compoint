@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const { PERMISOS, TODOS } = require('../utils/finanzas');
+const { darLlaveArchivos } = require('../utils/archivos');
 
 // Finanzas las usan dos tipos de usuario:
 //  - Administrador del panel (rol admin): tiene todos los permisos.
@@ -19,6 +20,7 @@ async function verificarFinanzas(req, res, next) {
     if (datos.tipo === 'admin') {
       if (datos.rol !== 'admin') return res.status(403).json({ error: 'Tu usuario no tiene acceso a finanzas' });
       req.fin = { tipo: 'admin', id: datos.id, nombre: datos.nombre, permisos: { ...TODOS } };
+      darLlaveArchivos(res);   // para ver la foto de la terminal en el corte
       return next();
     }
     if (datos.tipo === 'empleado') {
@@ -28,6 +30,7 @@ async function verificarFinanzas(req, res, next) {
       const permisos = Object.fromEntries(PERMISOS.map((k) => [k, p[k] === true]));
       if (!Object.values(permisos).some(Boolean)) return res.status(403).json({ error: 'No tienes permisos de finanzas. Pídelos al dueño.' });
       req.fin = { tipo: 'empleado', id: rows[0].id, nombre: rows[0].nombre, puesto: rows[0].puesto, permisos };
+      if (permisos.corte) darLlaveArchivos(res);   // quien hace el corte ve la foto de la terminal
       return next();
     }
     res.status(401).json({ error: 'Sesión no válida' });

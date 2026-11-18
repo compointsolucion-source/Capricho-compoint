@@ -172,7 +172,8 @@ router.get('/:id/historial', requiereAdmin, async (req, res, next) => {
 // Eliminar definitivamente: borra al empleado con TODO su historial (checadas, incidencias,
 // bonos y pagos de nómina) y sus fotos. Queda registrado en Auditoría.
 router.delete('/:id', requiereAdmin, async (req, res, next) => {
-  const cliente = await pool.connect();
+  let cliente;
+  try { cliente = await pool.connect(); } catch (e) { return next(e); }
   try {
     const id = Number(req.params.id);
     await cliente.query('BEGIN');

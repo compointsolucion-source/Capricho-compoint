@@ -23,6 +23,7 @@ async function api(ruta, { method = 'GET', body, tokenKey = window.CC_TOKEN_KEY 
   } catch (e) {
     throw new Error('No hay conexión con el servidor. Si es la primera vez del día, espera 30 segundos (el servidor se está despertando) e intenta de nuevo.');
   }
+  guardarLlaveArchivos(resp);
   let datos = null;
   try { datos = await resp.json(); } catch (_) { datos = null; }
   if (resp.status === 401 && !sinRedirigir && (tokenKey === 'cc_token' || tokenKey === 'cc_token_empleado')) {
@@ -64,7 +65,26 @@ function exportarCsv(nombre, encabezados, filas) {
   bajarBlob(new Blob(['﻿' + texto], { type: 'text/csv;charset=utf-8' }), nombre);
 }
 
-function urlArchivo(url) { return url ? (url.startsWith('http') ? url : BASE_SERVIDOR + url) : ''; }
+// Fotos y justificantes: el servidor solo los entrega con la llave del día, que llega con cada
+// respuesta de quien tiene sesión (cabecera X-Llave-Archivos). Se agrega sola a la dirección.
+let LLAVE_ARCHIVOS = '';
+function guardarLlaveArchivos(resp) {
+  const k = resp && resp.headers && resp.headers.get('X-Llave-Archivos');
+  if (!k) return;
+  LLAVE_ARCHIVOS = k;
+  try { localStorage.setItem('cc_llave_archivos', k); } catch (_) { /* sin almacenamiento */ }
+}
+function llaveArchivos() {
+  if (LLAVE_ARCHIVOS) return LLAVE_ARCHIVOS;
+  try { return localStorage.getItem('cc_llave_archivos') || ''; } catch (_) { return ''; }
+}
+function urlArchivo(url) {
+  if (!url) return '';
+  let u = url.startsWith('http') ? url : BASE_SERVIDOR + url;
+  const k = llaveArchivos();
+  if (k && /\/api\/archivos\/[0-9a-f-]{36}$/i.test(u)) u += '?k=' + encodeURIComponent(k);
+  return u;
+}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -288,7 +308,7 @@ async function iniciarFinanzas(permisosPagina = []) {
       ...(p.ver_utilidad ? [{ href: 'mes.html', texto: 'Mes', modulo: 'finanzas' }] : [])
     ], `<div class="user-name">${esc(yo.nombre)}</div>
         <div style="font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.06em;">${esc(yo.puesto || 'Empleado')}</div>
-        <a href="#" class="logout" onclick="localStorage.removeItem('cc_token_empleado');location.href='portal.html';return false;">Cerrar sesión</a>`);
+        <a href="#" class="logout" onclick="localStorage.removeItem('cc_token_empleado');localStorage.removeItem('cc_llave_archivos');location.href='portal.html';return false;">Cerrar sesión</a>`);
   }
   return yo;
 }
@@ -328,6 +348,7 @@ function preguntar(titulo, texto, { boton = 'Aceptar', peligro = false, campo = 
 
 function cerrarSesion() {
   localStorage.removeItem('cc_token');
+  localStorage.removeItem('cc_llave_archivos');
   localStorage.removeItem('cc_usuario');
   location.href = 'login.html';
 }
